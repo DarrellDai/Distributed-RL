@@ -7,7 +7,7 @@ import gym
 import numpy as np
 from gym import error, spaces
 from mlagents_envs import logging_util
-from mlagents_envs.base_env import BaseEnv, DecisionSteps, TerminalSteps
+from mlagents_envs.base_env import BaseEnv, DecisionSteps, TerminalSteps, ActionTuple
 
 
 class UnityGymException(error.Error):
@@ -180,7 +180,13 @@ class UnityToGymWrapper(gym.Env):
             action = self._flattener.lookup_action(action)
 
         spec = self.group_spec
-        action = np.array(action).reshape((1, spec.action_size))
+        action = np.array(action).reshape((1, spec.action_spec.continuous_size+spec.action_spec.discrete_size))
+        if spec.action_spec.continuous_size==0:
+            action=ActionTuple(discrete=action)
+        elif spec.action_spec.discrete_size==0:
+            action = ActionTuple(continuous=action)
+        else:action=ActionTuple(continuous=action[:spec.action_spec.continuous_size], discrete=action[spec.action_spec.continuous_size:])
+
         self._env.set_actions(self.name, action)
 
         self._env.step()
@@ -436,7 +442,7 @@ class MultiUnityWrapper():
             # Set observations space
             if group_spec.action_spec.continuous_size==0:
                 branches = group_spec.action_spec.discrete_branches
-                if group_spec.action_shape == 1:
+                if group_spec.action_spec.discrete_size == 1:
                     action_space = spaces.Discrete(branches[0])
                 else:
                     if flatten_branched:
@@ -451,7 +457,7 @@ class MultiUnityWrapper():
                         "The environment has a non-discrete action space. It will "
                         "not be flattened."
                     )
-                high = np.array([1] * group_spec.action_shape)
+                high = np.array([1] * (group_spec.action_spec.continuous_size+group_spec.action_spec.discrete_size))
                 action_space = spaces.Box(-high, high, dtype=np.float32)
 
             # Set observations space
@@ -517,6 +523,15 @@ class MultiUnityWrapper():
 
         for agent_id, action in action_dict.items():
             behaviour_name = self._agent_id_to_behaviour_name[agent_id]
+            spec = self._env.behavior_specs[behaviour_name]
+            action = np.array(action).reshape((1, spec.action_spec.continuous_size + spec.action_spec.discrete_size))
+            if spec.action_spec.continuous_size == 0:
+                action = ActionTuple(discrete=action)
+            elif spec.action_spec.discrete_size == 0:
+                action = ActionTuple(continuous=action)
+            else:
+                action = ActionTuple(continuous=action[:spec.action_spec.continuous_size],
+                                     discrete=action[spec.action_spec.continuous_size:])
             self._env.set_action_for_agent(behaviour_name, agent_id, action)
 
         self._env.step()
