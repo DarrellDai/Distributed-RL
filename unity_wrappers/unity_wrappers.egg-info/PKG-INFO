@@ -1,0 +1,8 @@
+Metadata-Version: 2.1
+Name: unity-wrappers
+Version: 0.17.0
+Summary: Unity Machine Learning Agents Gym Interface
+Home-page: https://github.com/Unity-Technologies/ml-agents
+Author: Unity Technologies modified by Thales Pôle IA - labo RHS
+Author-email: ML-Agents@unity3d.com
+License: Apache License 2.0
