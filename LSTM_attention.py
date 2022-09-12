@@ -28,8 +28,11 @@ class LSTM(nn.Module):
         outs = out
         x = x.view(bsize, time_step, self.input_size)
         x_new = torch.concat((x[:, 0:1, :], outs), 2)
-
+        atten = outs
         for T in range(time_step):
+            previous_hidden_state = hidden_state
+            previous_cell_state = cell_state
+            # Calculate weighted outputs as attention to make new input by concatenating with the input
             if T > 0:
                 score = torch.zeros((outs.shape[0], 1, outs.shape[1]), requires_grad=False)
                 for t in range(T + 1):
@@ -42,7 +45,7 @@ class LSTM(nn.Module):
             cell_state = lstm_out[1][1]
             out = lstm_out[0]
             outs = torch.concat((outs, out), 1)
-        return out, (hidden_state, cell_state)
+        return out, (hidden_state, cell_state), (previous_hidden_state, previous_cell_state), atten
 
     # '''
     # Treat time_step number of states as encoder, and these state won't be calculated with attention

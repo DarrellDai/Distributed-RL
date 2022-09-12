@@ -25,20 +25,16 @@ class Memory():
 
 class DQN(nn.Module):
 
-    def __init__(self, input_size, out_size):
+    def __init__(self, input_size):
         super(DQN, self).__init__()
-        self.input_size = input_size
-        self.out_size = out_size
 
-        self.adv = nn.Linear(in_features=input_size, out_features=self.out_size)
-        self.val = nn.Linear(in_features=input_size, out_features=1)
-        self.relu = nn.ReLU()
+        self.qnetwork = nn.Sequential(nn.Linear(input_size, input_size),
+                                      nn.ReLU(),
+                                      nn.Linear(input_size, input_size),
+                                      nn.ReLU(),
+                                      nn.Linear(input_size, 1))
 
-    def forward(self, x, bsize):
-        adv_out = self.adv(x)
-        val_out = self.val(x)
-
-        qout = val_out.expand(bsize, self.out_size) + (
-                adv_out - adv_out.mean(dim=1).unsqueeze(dim=1).expand(bsize, self.out_size))
+    def forward(self, x):
+        qout = self.qnetwork(x)
 
         return qout
