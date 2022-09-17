@@ -387,7 +387,7 @@ class MultiUnityWrapper():
             self._env.step()
 
         self.visual_obs = None
-
+        self.done_dict=None
         # Save the step result from the last time all Agents requested decisions.
         self._previous_decision_step: DecisionSteps = None
         self._flattener = None
@@ -499,9 +499,10 @@ class MultiUnityWrapper():
         self.game_over = False
 
         res: GymStepResult = self._single_step(decision_steps_dict)
+        self.done_dict=res[2]
+        self.done_dict["__all__"] = False
         # Returns only observation
         return res[0]
-
     def step(self, action_dict: Dict) -> MultiStepResult:
         """
         Run one timestep of the environment's dynamics. When end of
@@ -522,17 +523,19 @@ class MultiUnityWrapper():
                 action_dict[agent] = self._flattener.lookup_action(action)
 
         for agent_id, action in action_dict.items():
-            behaviour_name = self._agent_id_to_behaviour_name[agent_id]
-            spec = self._env.behavior_specs[behaviour_name]
-            action = np.array(action).reshape((1, spec.action_spec.continuous_size + spec.action_spec.discrete_size))
-            if spec.action_spec.continuous_size == 0:
-                action = ActionTuple(discrete=action)
-            elif spec.action_spec.discrete_size == 0:
-                action = ActionTuple(continuous=action)
-            else:
-                action = ActionTuple(continuous=action[:spec.action_spec.continuous_size],
-                                     discrete=action[spec.action_spec.continuous_size:])
-            self._env.set_action_for_agent(behaviour_name, agent_id, action)
+            if agent_id in self.done_dict:
+                if not self.done_dict[agent_id]:
+                    behaviour_name = self._agent_id_to_behaviour_name[agent_id]
+                    spec = self._env.behavior_specs[behaviour_name]
+                    action = np.array(action).reshape((1, spec.action_spec.continuous_size + spec.action_spec.discrete_size))
+                    if spec.action_spec.continuous_size == 0:
+                        action = ActionTuple(discrete=action)
+                    elif spec.action_spec.discrete_size == 0:
+                        action = ActionTuple(continuous=action)
+                    else:
+                        action = ActionTuple(continuous=action[:spec.action_spec.continuous_size],
+                                             discrete=action[spec.action_spec.continuous_size:])
+                    self._env.set_action_for_agent(behaviour_name, agent_id, action)
 
         self._env.step()
         decision_steps_dict, terminal_steps_dict = {}, {}
@@ -547,7 +550,12 @@ class MultiUnityWrapper():
 
         decision_obs_dict, decision_reward_dict, decision_done_dict, decision_info = self._single_step(
             decision_steps_dict)
-        if len(terminal_step) != 0:
+        all_terminal=False
+        for behaviour_name in self.behaviour_names:
+            if len(terminal_steps_dict[behaviour_name]) != 0:
+                all_terminal=True
+                break
+        if all_terminal:
             # At least one agent is done
             _terminal_obs_dict, terminal_reward_dict, terminal_done_dict, terminal_info = self._single_step(
                 terminal_steps_dict)
@@ -565,6 +573,7 @@ class MultiUnityWrapper():
         # Game is over when all agents are done
         done_dict["__all__"] = self.game_over = (all(done_dict.values()) and len(
             done_dict.values()) == self._n_agents)
+        self.done_dict=done_dict
         return (obs_dict, reward_dict, done_dict, info_dict)
 
     def _single_step(self, info_dict: Dict[str, Tuple[DecisionSteps, TerminalSteps]]) -> GymStepResult:
@@ -578,7 +587,8 @@ class MultiUnityWrapper():
                 visual_obs = self._get_vis_obs_list(info)
                 visual_obs_list = []
                 for obs in visual_obs:
-                    visual_obs_list.append(self._preprocess_single(obs[0]))
+                    if len(obs)>0:
+                        visual_obs_list.append(self._preprocess_single(obs[0]))
                 default_observation = visual_obs_list
                 if vec_obs_size[behaviour_name] >= 1:
                     default_observation.append(
@@ -586,15 +596,12 @@ class MultiUnityWrapper():
             else:
                 if n_vis_obs[behaviour_name] >= 1:
                     visual_obs = self._get_vis_obs_list(info)
-                    default_observation = self._preprocess_single(
+                    if len(visual_obs[0])>0:
+                        default_observation = self._preprocess_single(
                         visual_obs[0][0])
                 else:
                     obs_dict.update(self._get_vector_obs(
                         info))
-
-            if n_vis_obs[behaviour_name] >= 1:
-                visual_obs = self._get_vis_obs_list(info)
-                self.visual_obs = self._preprocess_single(visual_obs[0][0])
 
             done = isinstance(info, TerminalSteps)
             for agent_id in info.agent_id:
