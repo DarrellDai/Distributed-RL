@@ -5,11 +5,12 @@ import torch
 
 class LSTM(nn.Module):
 
-    def __init__(self, input_size, hidden_size):
+    def __init__(self, input_size, hidden_size, atten_size):
         super(LSTM, self).__init__()
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.input_size = input_size
         self.hidden_size = hidden_size
+        self.atten_size=atten_size
         self.lstm_layer = nn.LSTM(input_size=self.input_size + self.hidden_size, hidden_size=self.hidden_size,
                                   num_layers=1,
                                   batch_first=True)
@@ -23,29 +24,27 @@ class LSTM(nn.Module):
     Recursively take all previous states as attention
     '''
 
-    def forward(self, x, bsize, time_step, hidden_state, cell_state, out):
-        # time_step: number of time_step before an action, so time_step number of obs are needed as input
-        outs = out
-        x = x.view(bsize, time_step, self.input_size)
-        x_new = torch.concat((x[:, 0:1, :], outs), 2)
-        atten = outs
-        for T in range(time_step):
-            previous_hidden_state = hidden_state
-            previous_cell_state = cell_state
+    def forward(self, x, bsize, hidden_state, cell_state, out):
+        x = x.view(bsize, -1, self.input_size).float().to(self.device)
+        for T in range(x.shape[1]):
             # Calculate weighted outputs as attention to make new input by concatenating with the input
-            if T > 0:
-                score = torch.zeros((outs.shape[0], 1, outs.shape[1]), requires_grad=False)
-                for t in range(T + 1):
-                    score[:, :, t] = self.atten_layer(torch.concat((outs[:, t, :], hidden_state[0]), 1))
+            if out.shape[1] > 1:
+                score = torch.zeros((out.shape[0], 1, out.shape[1]), requires_grad=False).float().to(self.device)
+                for t in range(out.shape[1]):
+                    score[:, :, t] = self.atten_layer(torch.concat((out[:, t, :], hidden_state[0]), 1))
                 weight = nn.Softmax(1)(score)
-                atten = torch.bmm(weight, outs)
+                atten = torch.bmm(weight, out)
                 x_new = torch.concat((x[:, T:T + 1, :], atten), 2)
+            else:
+                x_new = torch.concat((x[:, 0:1, :], out), 2)
             lstm_out = self.lstm_layer(x_new, (hidden_state, cell_state))
             hidden_state = lstm_out[1][0]
             cell_state = lstm_out[1][1]
-            out = lstm_out[0]
-            outs = torch.concat((outs, out), 1)
-        return out, (hidden_state, cell_state), (previous_hidden_state, previous_cell_state), atten
+            single_out = lstm_out[0]
+            out = torch.concat((out, single_out), 1)
+            start_outs=max(0, out.shape[1] - self.atten_size)
+            out= out[:, start_outs:, :]
+        return out, (hidden_state, cell_state)
 
     # '''
     # Treat time_step number of states as encoder, and these state won't be calculated with attention
