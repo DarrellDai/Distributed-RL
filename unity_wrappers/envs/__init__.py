@@ -36,11 +36,11 @@ class UnityToGymWrapper(gym.Env):
     """
 
     def __init__(
-        self,
-        unity_env: BaseEnv,
-        uint8_visual: bool = False,
-        flatten_branched: bool = False,
-        allow_multiple_obs: bool = False,
+            self,
+            unity_env: BaseEnv,
+            uint8_visual: bool = False,
+            flatten_branched: bool = False,
+            allow_multiple_obs: bool = False,
     ):
         """
         Environment initialization
@@ -91,8 +91,8 @@ class UnityToGymWrapper(gym.Env):
         else:
             self.uint8_visual = uint8_visual
         if (
-            self._get_n_vis_obs() + self._get_vec_obs_size() >= 2
-            and not self._allow_multiple_obs
+                self._get_n_vis_obs() + self._get_vec_obs_size() >= 2
+                and not self._allow_multiple_obs
         ):
             logger.warning(
                 "The environment contains multiple observations. "
@@ -108,7 +108,7 @@ class UnityToGymWrapper(gym.Env):
         self._previous_decision_step = decision_steps
 
         # Set action spaces
-        if self.group_spec.action_spec.continuous_size==0:
+        if self.group_spec.action_spec.continuous_size == 0:
             branches = self.group_spec.action_spec.discrete_branches
             if self.group_spec.action_spec.discrete_size == 1:
                 self._action_space = spaces.Discrete(branches[0])
@@ -180,12 +180,14 @@ class UnityToGymWrapper(gym.Env):
             action = self._flattener.lookup_action(action)
 
         spec = self.group_spec
-        action = np.array(action).reshape((1, spec.action_spec.continuous_size+spec.action_spec.discrete_size))
-        if spec.action_spec.continuous_size==0:
-            action=ActionTuple(discrete=action)
-        elif spec.action_spec.discrete_size==0:
+        action = np.array(action).reshape((1, spec.action_spec.continuous_size + spec.action_spec.discrete_size))
+        if spec.action_spec.continuous_size == 0:
+            action = ActionTuple(discrete=action)
+        elif spec.action_spec.discrete_size == 0:
             action = ActionTuple(continuous=action)
-        else:action=ActionTuple(continuous=action[:spec.action_spec.continuous_size], discrete=action[spec.action_spec.continuous_size:])
+        else:
+            action = ActionTuple(continuous=action[:spec.action_spec.continuous_size],
+                                 discrete=action[spec.action_spec.continuous_size:])
 
         self._env.set_actions(self.name, action)
 
@@ -244,7 +246,7 @@ class UnityToGymWrapper(gym.Env):
         return result
 
     def _get_vis_obs_list(
-        self, step_result: Union[DecisionSteps, TerminalSteps]
+            self, step_result: Union[DecisionSteps, TerminalSteps]
     ) -> List[np.ndarray]:
         result: List[np.ndarray] = []
         for obs in step_result.obs:
@@ -253,7 +255,7 @@ class UnityToGymWrapper(gym.Env):
         return result
 
     def _get_vector_obs(
-        self, step_result: Union[DecisionSteps, TerminalSteps]
+            self, step_result: Union[DecisionSteps, TerminalSteps]
     ) -> np.ndarray:
         result: List[np.ndarray] = []
         for obs in step_result.obs:
@@ -317,6 +319,7 @@ class ActionFlattener:
     """
     Flattens branched discrete action spaces into single-branch discrete action spaces.
     """
+
     # Unity class
 
     def __init__(self, branched_action_space):
@@ -358,15 +361,16 @@ class MultiUnityWrapper():
     """
     Provides wrapper for Unity Learning Environments, supporting multiagents.
     """
+
     # Implemented class. Implements: rllib.MultiEnv.
     # (not done because rllib cannot be installed on windows for now)
 
     def __init__(
-        self,
-        unity_env: BaseEnv,
-        uint8_visual: bool = False,
-        flatten_branched: bool = False,
-        allow_multiple_obs: bool = False,
+            self,
+            unity_env: BaseEnv,
+            uint8_visual: bool = False,
+            flatten_branched: bool = False,
+            allow_multiple_obs: bool = False,
     ):
         """
         Environment initialization
@@ -387,7 +391,7 @@ class MultiUnityWrapper():
             self._env.step()
 
         self.visual_obs = None
-        self.done_dict=None
+        self.done_dict = None
         # Save the step result from the last time all Agents requested decisions.
         self._previous_decision_step: DecisionSteps = None
         self._flattener = None
@@ -425,7 +429,8 @@ class MultiUnityWrapper():
         else:
             self.uint8_visual = uint8_visual
 
-        if all(self._get_n_vis_obs().values()) + all(self._get_vec_obs_size().values()) >= 2 and not self._allow_multiple_obs:
+        if all(self._get_n_vis_obs().values()) + all(
+                self._get_vec_obs_size().values()) >= 2 and not self._allow_multiple_obs:
             logger.warning(
                 "The environment contains multiple observations. "
                 "You must define allow_multiple_obs=True to receive them all. "
@@ -440,7 +445,7 @@ class MultiUnityWrapper():
         shape_dict = self._get_vis_obs_shape()
         for behaviour_name, group_spec in self._env.behavior_specs.items():
             # Set observations space
-            if group_spec.action_spec.continuous_size==0:
+            if group_spec.action_spec.continuous_size == 0:
                 branches = group_spec.action_spec.discrete_branches
                 if group_spec.action_spec.discrete_size == 1:
                     action_space = spaces.Discrete(branches[0])
@@ -457,7 +462,7 @@ class MultiUnityWrapper():
                         "The environment has a non-discrete action space. It will "
                         "not be flattened."
                     )
-                high = np.array([1] * (group_spec.action_spec.continuous_size+group_spec.action_spec.discrete_size))
+                high = np.array([1] * (group_spec.action_spec.continuous_size + group_spec.action_spec.discrete_size))
                 action_space = spaces.Box(-high, high, dtype=np.float32)
 
             # Set observations space
@@ -499,10 +504,11 @@ class MultiUnityWrapper():
         self.game_over = False
 
         res: GymStepResult = self._single_step(decision_steps_dict)
-        self.done_dict=res[2]
+        self.done_dict = res[2]
         self.done_dict["__all__"] = False
         # Returns only observation
         return res[0]
+
     def step(self, action_dict: Dict) -> MultiStepResult:
         """
         Run one timestep of the environment's dynamics. When end of
@@ -527,7 +533,8 @@ class MultiUnityWrapper():
                 if not self.done_dict[agent_id]:
                     behaviour_name = self._agent_id_to_behaviour_name[agent_id]
                     spec = self._env.behavior_specs[behaviour_name]
-                    action = np.array(action).reshape((1, spec.action_spec.continuous_size + spec.action_spec.discrete_size))
+                    action = np.array(action).reshape(
+                        (1, spec.action_spec.continuous_size + spec.action_spec.discrete_size))
                     if spec.action_spec.continuous_size == 0:
                         action = ActionTuple(discrete=action)
                     elif spec.action_spec.discrete_size == 0:
@@ -550,14 +557,14 @@ class MultiUnityWrapper():
 
         decision_obs_dict, decision_reward_dict, decision_done_dict, decision_info = self._single_step(
             decision_steps_dict)
-        all_terminal=False
+        all_terminal = False
         for behaviour_name in self.behaviour_names:
             if len(terminal_steps_dict[behaviour_name]) != 0:
-                all_terminal=True
+                all_terminal = True
                 break
         if all_terminal:
             # At least one agent is done
-            _terminal_obs_dict, terminal_reward_dict, terminal_done_dict, terminal_info = self._single_step(
+            terminal_obs_dict, terminal_reward_dict, terminal_done_dict, terminal_info = self._single_step(
                 terminal_steps_dict)
         else:
             terminal_reward_dict, terminal_done_dict, terminal_info = {}, {}, {}
@@ -565,6 +572,8 @@ class MultiUnityWrapper():
         # Create MultiStepResult dicts
         # Episode is done: no terminal_obs
         obs_dict = decision_obs_dict
+        if len(obs_dict) == 0:
+            obs_dict = terminal_obs_dict
         reward_dict = {**decision_reward_dict, **terminal_reward_dict}
         done_dict = {**decision_done_dict, **terminal_done_dict}
         info_dict = {"decision_step": decision_info,
@@ -573,7 +582,8 @@ class MultiUnityWrapper():
         # Game is over when all agents are done
         done_dict["__all__"] = self.game_over = (all(done_dict.values()) and len(
             done_dict.values()) == self._n_agents)
-        self.done_dict=done_dict
+        # self.done_dict = done_dict
+
         return (obs_dict, reward_dict, done_dict, info_dict)
 
     def _single_step(self, info_dict: Dict[str, Tuple[DecisionSteps, TerminalSteps]]) -> GymStepResult:
@@ -587,7 +597,7 @@ class MultiUnityWrapper():
                 visual_obs = self._get_vis_obs_list(info)
                 visual_obs_list = []
                 for obs in visual_obs:
-                    if len(obs)>0:
+                    if len(obs) > 0:
                         visual_obs_list.append(self._preprocess_single(obs[0]))
                 default_observation = visual_obs_list
                 if vec_obs_size[behaviour_name] >= 1:
@@ -596,9 +606,9 @@ class MultiUnityWrapper():
             else:
                 if n_vis_obs[behaviour_name] >= 1:
                     visual_obs = self._get_vis_obs_list(info)
-                    if len(visual_obs[0])>0:
+                    if len(visual_obs[0]) > 0:
                         default_observation = self._preprocess_single(
-                        visual_obs[0][0])
+                            visual_obs[0][0])
                 else:
                     obs_dict.update(self._get_vector_obs(
                         info))
@@ -642,7 +652,7 @@ class MultiUnityWrapper():
         return vis_obs_shape_dict
 
     def _get_vis_obs_list(
-        self, step_result: Union[DecisionSteps, TerminalSteps]
+            self, step_result: Union[DecisionSteps, TerminalSteps]
     ) -> List[np.ndarray]:
         result: List[np.ndarray] = []
         for obs in step_result.obs:
@@ -651,7 +661,7 @@ class MultiUnityWrapper():
         return result
 
     def _get_vector_obs(
-        self, step_result: Union[DecisionSteps, TerminalSteps]
+            self, step_result: Union[DecisionSteps, TerminalSteps]
     ) -> Dict[str, np.ndarray]:
         vector_obs_dict = {}
         for agents_obs in step_result.obs:

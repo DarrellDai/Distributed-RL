@@ -10,7 +10,7 @@ class LSTM(nn.Module):
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.input_size = input_size
         self.hidden_size = hidden_size
-        self.atten_size=atten_size
+        self.atten_size = atten_size
         self.lstm_layer = nn.LSTM(input_size=self.input_size + self.hidden_size, hidden_size=self.hidden_size,
                                   num_layers=1,
                                   batch_first=True)
@@ -24,8 +24,9 @@ class LSTM(nn.Module):
     Recursively take all previous states as attention
     '''
 
+    # Input must be tensor
     def forward(self, x, bsize, hidden_state, cell_state, out):
-        x = x.view(bsize, -1, self.input_size).float().to(self.device)
+        x = x.reshape(bsize, -1, self.input_size).float().to(self.device)
         for T in range(x.shape[1]):
             # Calculate weighted outputs as attention to make new input by concatenating with the input
             if out.shape[1] > 1:
@@ -42,8 +43,8 @@ class LSTM(nn.Module):
             cell_state = lstm_out[1][1]
             single_out = lstm_out[0]
             out = torch.concat((out, single_out), 1)
-            start_outs=max(0, out.shape[1] - self.atten_size)
-            out= out[:, start_outs:, :]
+            start_outs = max(0, out.shape[1] - self.atten_size)
+            out = out[:, start_outs:, :]
         return out, (hidden_state, cell_state)
 
     # '''
