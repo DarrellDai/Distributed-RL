@@ -3,7 +3,9 @@ import time
 from abc import ABC
 from typing import Any, Dict, List, Tuple, Union
 
+
 import gym
+import torch
 import numpy as np
 from gym import error, spaces
 from mlagents_envs import logging_util
@@ -533,16 +535,21 @@ class MultiUnityWrapper():
                 if not self.done_dict[agent_id]:
                     behaviour_name = self._agent_id_to_behaviour_name[agent_id]
                     spec = self._env.behavior_specs[behaviour_name]
-                    action = np.array(action).reshape(
-                        (1, spec.action_spec.continuous_size + spec.action_spec.discrete_size))
-                    if spec.action_spec.continuous_size == 0:
-                        action = ActionTuple(discrete=action)
-                    elif spec.action_spec.discrete_size == 0:
-                        action = ActionTuple(continuous=action)
+                    if torch.is_tensor(action):
+                        action_clone=torch.clone(action).cpu()
                     else:
-                        action = ActionTuple(continuous=action[:spec.action_spec.continuous_size],
-                                             discrete=action[spec.action_spec.continuous_size:])
-                    self._env.set_action_for_agent(behaviour_name, agent_id, action)
+                        action_clone = action
+                    action_clone = np.array(action_clone).reshape(
+                    (1, spec.action_spec.continuous_size + spec.action_spec.discrete_size))
+
+                    if spec.action_spec.continuous_size == 0:
+                        action_clone = ActionTuple(discrete=action_clone)
+                    elif spec.action_spec.discrete_size == 0:
+                        action_clone = ActionTuple(continuous=action_clone)
+                    else:
+                        action_clone = ActionTuple(continuous=action_clone[:spec.action_spec.continuous_size],
+                                             discrete=action_clone[spec.action_spec.continuous_size:])
+                    self._env.set_action_for_agent(behaviour_name, agent_id, action_clone)
 
         self._env.step()
         decision_steps_dict, terminal_steps_dict = {}, {}

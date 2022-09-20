@@ -2,31 +2,29 @@ import numpy as np
 import random
 import torch.nn as nn
 import torch
-import matplotlib.pyplot as plt
-from collections import deque
 from Network import Network
 from Experience_Replay import Memory
 from unity_wrappers.envs import MultiUnityWrapper
 from mlagents_envs.environment import UnityEnvironment
 from copy import deepcopy
-from utils import find_optimal_action, save_obj
+from utils import find_optimal_action, save_obj, convert_to_array
 
 AGENT_ID = (0, 1)
 CNN_OUT_SIZE = {0: 512, 1: 512}
 LSTM_HIDDEN_SIZE = {0: 512, 1: 512}
 ATTEN_SIZE = {0: 2, 1: 2}
 ACTION_SHAPE = {0: (3, 3), 1: (3, 3)}
-BATCH_SIZE = 1
-TIME_STEP = 3
+BATCH_SIZE = 32
+TIME_STEP = 15
 GAMMA = 0.99
 INITIAL_EPSILON = 1.0
 FINAL_EPSILON = 0.1
-TOTAL_EPSIODES = 3
-MAX_STEPS = 10
-MEMORY_SIZE = 3
-UPDATE_FREQ = 1
+TOTAL_EPSIODES = 20000
+MAX_STEPS = 200
+MEMORY_SIZE = 3000
+UPDATE_FREQ = 5
 PERFORMANCE_SAVE_INTERVAL = 500
-TARGET_UPDATE_FREQ = 1  # steps
+TARGET_UPDATE_FREQ = 10000  # steps
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 mem = Memory(memsize=MEMORY_SIZE, agent_ids=AGENT_ID)
@@ -174,12 +172,12 @@ for episode in range(TOTAL_EPSIODES):
                 for b in batch:
                     cvis, cves, ac, rw, nvis, nves = [], [], [], [], [], []
                     for element in b:
-                        cvis.append(np.array(element[0][0]))
-                        cves.append(np.array(element[0][1][list(element[0][1].keys())[0]]))
-                        ac.append(np.array(element[1]))
-                        rw.append(element[2])
-                        nvis.append(np.array(element[3][0]))
-                        nves.append(np.array(element[3][1][list(element[0][1].keys())[0]]))
+                        cvis.append(convert_to_array(element[0][0]))
+                        cves.append(convert_to_array(element[0][1][list(element[0][1].keys())[0]]))
+                        ac.append(convert_to_array(element[1]))
+                        rw.append(convert_to_array(element[2]))
+                        nvis.append(convert_to_array(element[3][0]))
+                        nves.append(convert_to_array(element[3][1][list(element[0][1].keys())[0]]))
                     current_visual_obs.append(cvis)
                     current_vector_obs.append(cves)
                     act.append(ac)
@@ -199,7 +197,7 @@ for episode in range(TOTAL_EPSIODES):
                 rewards = torch.from_numpy(rewards).float().to(device)
                 next_visual_obs = torch.from_numpy(next_visual_obs).float().to(device)
                 visual_obs = torch.concat((current_visual_obs, next_visual_obs[:, -1:]), 1)
-                Q_next_max = np.zeros(BATCH_SIZE)
+                Q_next_max = torch.zeros(BATCH_SIZE).float().to(device)
                 for batch_idx in range(BATCH_SIZE):
                     if next_vector_obs[batch_idx][0][0] == 1:
                         _, _, Q_next, _, _ = target_model[id].forward(visual_obs[batch_idx:batch_idx + 1],
@@ -207,14 +205,14 @@ for episode in range(TOTAL_EPSIODES):
                                                                       bsize=1,
                                                                       hidden_state=hidden_batch, cell_state=cell_batch,
                                                                       lstm_out=out_batch)
-                        Q_next_max[batch_idx] = np.array(Q_next.detach()).max(1).max(1)[0]
+                        Q_next_max[batch_idx] = torch.max(Q_next.reshape(-1))
                 target_values = rewards[:, TIME_STEP - 1] + (GAMMA * Q_next_max)
                 target_values = target_values.float()
-                _, _, Q_s, _, _ = main_model[id].forward(current_visual_obs, act[:, :-1], bsize=BATCH_SIZE,
+                _, _, Q_s, _, _ = main_model[id].forward(current_visual_obs, act, bsize=BATCH_SIZE,
                                                          hidden_state=hidden_batch, cell_state=cell_batch,
                                                          lstm_out=out_batch)
-                Q_s_a = Q_s[0, 0, 0]
 
+                Q_s_a = Q_s[0, 0]
                 loss = criterion(Q_s_a, target_values)
 
                 #  save performance measure
