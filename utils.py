@@ -2,7 +2,7 @@ import torch
 import numpy as np
 import pickle
 import torch
-
+import os
 
 # dqn_out(bsize, act_shape[0]...)
 def find_optimal_action(dqn_out):
@@ -19,5 +19,29 @@ def convert_to_array(object):
         object=np.array(object.detach().cpu())
     return object
 def save_obj(obj, name):
+    if not os.path.exists("data"):
+        os.mkdir("data")
     with open('data/' + name + '.pkl', 'wb') as f:
         pickle.dump(obj, f, pickle.HIGHEST_PROTOCOL)
+
+def save_checkpoint(state, dirname='Checkpoint'):
+    if not os.path.exists(dirname):
+        os.mkdir(dirname)
+    filename='Checkpoint_{}.pth.tar'.format(state['episode_count'])
+    filepath = os.path.join(dirname, filename)
+    torch.save(state, filepath)
+
+def find_latest_checkpoint(dirname='Checkpoint'):
+    checkpoints = os.listdir(os.path.join(os.path.dirname(__file__), dirname))
+    lastest_checkpoint_count = 0
+    if checkpoints:
+        for checkpoint in checkpoints:
+            current_checkpoint_count = int(checkpoint[11:-8])
+            if lastest_checkpoint_count < current_checkpoint_count:
+                lastest_checkpoint_count = current_checkpoint_count
+                checkpoint_to_load=checkpoint
+    return os.path.join(os.path.dirname(__file__), dirname, checkpoint_to_load)
+def load_checkpoint(file):
+    checkpoint = torch.load(file)
+
+    return checkpoint['model_state_dicts'], checkpoint['optimizer_state_dicts'] ,checkpoint['total_steps'], checkpoint['episode_count'], checkpoint['epsilon'], checkpoint['memory'], checkpoint['loss_stat'], checkpoint['reward_stat']
