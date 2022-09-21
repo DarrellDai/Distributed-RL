@@ -31,7 +31,7 @@ INITIAL_EPSILON = 1.0
 FINAL_EPSILON = 0.1
 EPSILON_CHANGE_RATE = 0.999
 TOTAL_EPSIODES = 2000
-MAX_STEPS = 50
+MAX_STEPS = 200
 MEMORY_SIZE = 100
 PERFORMANCE_DISPLAY_INTERVAL = 20  # episodes
 CHECKPOINT_SAVE_INTERVAL = 10  # episodes
@@ -202,6 +202,18 @@ for episode in tqdm(range(start_episode, start_episode + TOTAL_EPSIODES)):
 
         obs_dict, reward_dict, done_dict, info_dict = env.step(act)
         done = done_dict["__all__"]
+
+        for id in AGENT_ID:
+            total_reward[id] += reward_dict[id]
+
+            prev_obs[id][0] = prev_obs[id][0].reshape(prev_obs[id][0].shape[2], prev_obs[id][0].shape[3],
+                                                      prev_obs[id][0].shape[4])
+            act[id] = act[id].reshape(-1)
+
+            local_memory[id].append(
+                (deepcopy(prev_obs[id]), deepcopy(act[id]), deepcopy(reward_dict[id]), deepcopy(obs_dict[id])))
+
+        prev_obs = deepcopy(obs_dict)
 
         if (total_steps % TARGET_UPDATE_FREQ) == 0:
             for id in AGENT_ID:
