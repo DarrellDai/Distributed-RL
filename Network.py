@@ -17,12 +17,11 @@ class Network(nn.Module):
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.action_shape = action_space_shape
         self.cnn_out_size = cnn_out_size
-        self.action_out_size=action_out_size
-        self.resnet = resnet18(num_classes=cnn_out_size, weights= ResNet18_Weights).to(self.device)
+        self.action_out_size = action_out_size
+        self.resnet = resnet18(num_classes=cnn_out_size, weights=ResNet18_Weights.DEFAULT).to(self.device)
         self.lstm = LSTM(cnn_out_size + action_out_size, lstm_hidden_size, atten_size).to(self.device)
         self.dqn = DQN(lstm_hidden_size).to(self.device)
-        self.actnet=ActNet(len(action_space_shape), action_out_size)
-
+        self.actnet = ActNet(len(action_space_shape), action_out_size)
 
     '''
     obs(torch.Tensor): observations
@@ -45,7 +44,7 @@ class Network(nn.Module):
             raise RuntimeError
         resnet_out = self.resnet.forward(obs)
         resnet_out = resnet_out.view(bsize, int(obs.shape[0] / bsize), -1)
-        act_out=self.actnet.forward(act)
+        act_out = self.actnet.forward(act)
         if act.shape[1] != 0:
             if resnet_out.shape[1] > act.shape[1]:
                 obs_act = torch.concat((resnet_out[:, :-1, :], act_out), -1)

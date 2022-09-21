@@ -46,7 +46,7 @@ MAX_LOSS_STAT_LEN = 40
 # EPSILON_CHANGE_RATE=0.99
 # TOTAL_EPSIODES = 30
 # MAX_STEPS = 100
-# MEMORY_SIZE = 10
+# MEMORY_SIZE = 2
 # UPDATE_FREQ = 2
 # PERFORMANCE_DISPLAY_INTERVAL = 2
 # CHECKPOINT_SAVE_INTERVAL = 2
@@ -60,7 +60,7 @@ criterion = nn.MSELoss()
 
 writer = SummaryWriter()
 
-env_path = 'D:/Unity Projects/Hide and Seek/Env/Hide and Seek'
+env_path = '../Env/Hide and Seek'
 unity_env = UnityEnvironment(env_path)
 env = MultiUnityWrapper(unity_env=unity_env, uint8_visual=True, allow_multiple_obs=True)
 
@@ -75,7 +75,8 @@ for id in AGENT_ID:
     target_model[id] = Network(cnn_out_size=CNN_OUT_SIZE[id], lstm_hidden_size=LSTM_HIDDEN_SIZE[id],
                                atten_size=ATTEN_SIZE[id], action_space_shape=ACTION_SHAPE[id],
                                action_out_size=ACTION_OUT_SIZE).float().to(device)
-
+    main_model[id] = nn.DataParallel(main_model[id], device_ids=[5, 6, 7])
+    target_model[id] = nn.DataParallel(target_model[id], device_ids=[5, 6, 7])
     target_model[id].load_state_dict(main_model[id].state_dict())
     optimizer[id] = torch.optim.Adam(main_model[id].parameters(), lr=LR)
 if resume:
@@ -148,7 +149,7 @@ for episode in tqdm(range(start_episode, start_episode + TOTAL_EPSIODES)):
         total_reward[id] = 0
         local_memory[id] = []
         alive[id] = True
-        hidden_state[id], cell_state[id], lstm_out[id] = main_model[id].lstm.init_hidden_states_and_outputs(bsize=1)
+        hidden_state[id], cell_state[id], lstm_out[id] = main_model[id].module.lstm.init_hidden_states_and_outputs(bsize=1)
     done = False
     while step_count < MAX_STEPS and not done:
 
@@ -158,13 +159,13 @@ for episode in tqdm(range(start_episode, start_episode + TOTAL_EPSIODES)):
         if np.random.rand(1) < epsilon:
             for id in AGENT_ID:
                 act[id] = ()
-                for n in main_model[id].action_shape:
+                for n in main_model[id].module.action_shape:
                     act[id] += (np.random.randint(0, n),)
                 act[id] = torch.tensor(act[id]).reshape(1, 1, len(act[id])).to(device)
                 prev_obs[id][0] = torch.from_numpy(prev_obs[id][0]).float().to(device)
                 prev_obs[id][0] = prev_obs[id][0].reshape(1, 1, prev_obs[id][0].shape[0], prev_obs[id][0].shape[1],
                                                           prev_obs[id][0].shape[2])
-                model_out = main_model[id].forward(prev_obs[id][0], act[id], bsize=1, hidden_state=hidden_state[id],
+                model_out = main_model[id].module.forward(prev_obs[id][0], act[id], bsize=1, hidden_state=hidden_state[id],
                                                    cell_state=cell_state[id], lstm_out=lstm_out[id])
 
                 hidden_state[id] = model_out[1][0]
@@ -177,12 +178,12 @@ for episode in tqdm(range(start_episode, start_episode + TOTAL_EPSIODES)):
                 prev_obs[id][0] = torch.from_numpy(prev_obs[id][0]).float().to(device)
                 prev_obs[id][0] = prev_obs[id][0].reshape(1, 1, prev_obs[id][0].shape[0], prev_obs[id][0].shape[1],
                                                           prev_obs[id][0].shape[2])
-                model_out = main_model[id].forward(prev_obs[id][0], act=torch.zeros((1, 0, len(ACTION_SHAPE))), bsize=1,
+                model_out = main_model[id].module.forward(prev_obs[id][0], act=torch.zeros((1, 0, len(ACTION_SHAPE))), bsize=1,
                                                    hidden_state=hidden_state[id],
                                                    cell_state=cell_state[id], lstm_out=lstm_out[id])
 
                 act[id] = torch.from_numpy(find_optimal_action(model_out[2]))
-                model_out = main_model[id].forward(prev_obs[id][0], act[id], bsize=1, hidden_state=hidden_state[id],
+                model_out = main_model[id].module.forward(prev_obs[id][0], act[id], bsize=1, hidden_state=hidden_state[id],
                                                    cell_state=cell_state[id], lstm_out=lstm_out[id])
                 hidden_state[id] = model_out[1][0]
                 cell_state[id] = model_out[1][1]
@@ -210,7 +211,7 @@ for episode in tqdm(range(start_episode, start_episode + TOTAL_EPSIODES)):
         if (total_steps % UPDATE_FREQ) == 0:
 
             for id in AGENT_ID:
-                hidden_batch, cell_batch, out_batch = main_model[id].lstm.init_hidden_states_and_outputs(
+                hidden_batch, cell_batch, out_batch = main_model[id].module.lstm.init_hidden_states_and_outputs(
                     bsize=BATCH_SIZE)
                 batch = mem.get_batch(bsize=BATCH_SIZE, time_step=TIME_STEP, agent_id=id)
                 current_visual_obs = []
@@ -251,7 +252,7 @@ for episode in tqdm(range(start_episode, start_episode + TOTAL_EPSIODES)):
                 Q_next_max = torch.zeros(BATCH_SIZE).float().to(device)
                 for batch_idx in range(BATCH_SIZE):
                     if next_vector_obs[batch_idx][0][0] == 1:
-                        _, _, Q_next, _, _ = target_model[id].forward(visual_obs[batch_idx:batch_idx + 1],
+                        _, _, Q_next, _, _ = target_model[id].module.forward(visual_obs[batch_idx:batch_idx + 1],
                                                                       act[batch_idx:batch_idx + 1],
                                                                       bsize=1,
                                                                       hidden_state=hidden_batch[:,
@@ -261,7 +262,7 @@ for episode in tqdm(range(start_episode, start_episode + TOTAL_EPSIODES)):
                         Q_next_max[batch_idx] = torch.max(Q_next.reshape(-1))
                 target_values = rewards[:, TIME_STEP - 1] + (GAMMA * Q_next_max)
                 target_values = target_values.float()
-                _, _, Q_s, _, _ = main_model[id].forward(current_visual_obs, act, bsize=BATCH_SIZE,
+                _, _, Q_s, _, _ = main_model[id].module.forward(current_visual_obs, act, bsize=BATCH_SIZE,
                                                          hidden_state=hidden_batch, cell_state=cell_batch,
                                                          lstm_out=out_batch)
 
