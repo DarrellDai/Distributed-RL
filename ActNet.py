@@ -6,13 +6,9 @@ class ActNet(nn.Module):
     def __init__(self, action_input_size, action_output_size):
         super(ActNet, self).__init__()
 
-        self.act_net = nn.Sequential(nn.Linear(action_input_size, action_input_size * 2),
+        self.act_net = nn.Sequential(nn.Linear(action_input_size, action_input_size * 4),
                                      nn.ReLU(),
-                                     nn.Linear(action_input_size * 2, action_input_size * 4),
-                                     nn.ReLU(),
-                                     nn.Linear(action_input_size * 4, action_input_size * 8),
-                                     nn.ReLU(),
-                                     nn.Linear(action_input_size * 8, action_output_size)
+                                     nn.Linear(action_input_size * 4, action_output_size),
                                      )
 
     def forward(self, x):
