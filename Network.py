@@ -1,8 +1,9 @@
 import torch.nn as nn
 import torch
 from LSTM_attention import LSTM
-from torchvision.models import resnet18
+from torchvision.models import resnet18, ResNet18_Weights
 from DQN import DQN
+from ActNet import ActNet
 import numpy as np
 
 
@@ -11,14 +12,17 @@ class Network(nn.Module):
     action_shape(tuple): action shape for an agent
     '''
 
-    def __init__(self, cnn_out_size, lstm_hidden_size, atten_size, action_shape):
+    def __init__(self, cnn_out_size, action_space_shape, action_out_size, lstm_hidden_size, atten_size):
         super(Network, self).__init__()
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        self.action_shape = action_shape
+        self.action_shape = action_space_shape
         self.cnn_out_size = cnn_out_size
-        self.resnet = resnet18(num_classes=cnn_out_size).to(self.device)
-        self.lstm = LSTM(cnn_out_size + len(action_shape), lstm_hidden_size, atten_size).to(self.device)
+        self.action_out_size=action_out_size
+        self.resnet = resnet18(num_classes=cnn_out_size, weights= ResNet18_Weights).to(self.device)
+        self.lstm = LSTM(cnn_out_size + action_out_size, lstm_hidden_size, atten_size).to(self.device)
         self.dqn = DQN(lstm_hidden_size).to(self.device)
+        self.actnet=ActNet(len(action_space_shape), action_out_size)
+
 
     '''
     obs(torch.Tensor): observations
@@ -41,11 +45,12 @@ class Network(nn.Module):
             raise RuntimeError
         resnet_out = self.resnet.forward(obs)
         resnet_out = resnet_out.view(bsize, int(obs.shape[0] / bsize), -1)
+        act_out=self.actnet.forward(act)
         if act.shape[1] != 0:
             if resnet_out.shape[1] > act.shape[1]:
-                obs_act = torch.concat((resnet_out[:, :-1, :], act), -1)
+                obs_act = torch.concat((resnet_out[:, :-1, :], act_out), -1)
             else:
-                obs_act = torch.concat((resnet_out, act), -1)
+                obs_act = torch.concat((resnet_out, act_out), -1)
             # Forward until in the last one the batch, so the attention is of the last one.
             # previous_hidden_state and previous_cell_state can be used to calculate the output for last obs and act.
             # The reason of doing this is because, unlike previous ones, the last one is not (obs,act) pair but only obs
@@ -68,8 +73,9 @@ class Network(nn.Module):
             cell_state_per_action = torch.zeros((1, bsize,) + self.action_shape + cell_state.shape[-1:]).float().to(
                 self.device)
             for idx, _ in np.ndenumerate(action_matrix):
-                new_acts = torch.tensor(idx).repeat(bsize, 1, 1).float().to(self.device)
-                obs_act = torch.concat((resnet_out[:, -1:, :], new_acts), -1)
+                proposed_acts = torch.tensor(idx).repeat(bsize, 1, 1).float().to(self.device)
+                proposed_act_out = self.actnet.forward(proposed_acts)
+                obs_act = torch.concat((resnet_out[:, -1:, :], proposed_act_out), -1)
                 lstm_out_all_act, (hidden_state_per_action[:, :, idx[0], idx[1], :],
                                    cell_state_per_action[:, :, idx[0], idx[1], :]) = self.lstm.forward(obs_act, bsize,
                                                                                                        hidden_state,

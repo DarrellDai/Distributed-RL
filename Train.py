@@ -14,10 +14,11 @@ from tqdm import tqdm
 from collections import deque
 
 AGENT_ID = (0, 1)
-CNN_OUT_SIZE = {0: 512, 1: 512}
+CNN_OUT_SIZE = {0: 1000, 1: 1000}
 LSTM_HIDDEN_SIZE = {0: 512, 1: 512}
 ATTEN_SIZE = {0: 2, 1: 2}
 ACTION_SHAPE = {0: (3, 3), 1: (3, 3)}
+ACTION_OUT_SIZE = 32
 
 BATCH_SIZE = 25
 TIME_STEP = 15
@@ -29,10 +30,10 @@ EPSILON_CHANGE_RATE = 0.99
 TOTAL_EPSIODES = 1200
 MAX_STEPS = 200
 MEMORY_SIZE = 100
-UPDATE_FREQ = 50
-PERFORMANCE_DISPLAY_INTERVAL = 50
-CHECKPOINT_SAVE_INTERVAL = 500
-TARGET_UPDATE_FREQ = 2000  # steps
+PERFORMANCE_DISPLAY_INTERVAL = 20  # episodes
+CHECKPOINT_SAVE_INTERVAL = 50  # episodes
+UPDATE_FREQ = 5  # steps
+TARGET_UPDATE_FREQ = 500  # steps
 MAX_LOSS_STAT_LEN = 40
 
 # # Parameters for testing
@@ -47,11 +48,12 @@ MAX_LOSS_STAT_LEN = 40
 # MAX_STEPS = 100
 # MEMORY_SIZE = 10
 # UPDATE_FREQ = 2
-# PERFORMANCE_SAVE_INTERVAL = 2
+# PERFORMANCE_DISPLAY_INTERVAL = 2
 # CHECKPOINT_SAVE_INTERVAL = 2
 # TARGET_UPDATE_FREQ = 90  # steps
 # MAX_LOSS_STAT_LEN=40
 
+resume = False
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 mem = Memory(memsize=MEMORY_SIZE, agent_ids=AGENT_ID)
 criterion = nn.MSELoss()
@@ -65,13 +67,14 @@ env = MultiUnityWrapper(unity_env=unity_env, uint8_visual=True, allow_multiple_o
 main_model = {}
 target_model = {}
 optimizer = {}
-resume = True
 
 for id in AGENT_ID:
     main_model[id] = Network(cnn_out_size=CNN_OUT_SIZE[id], lstm_hidden_size=LSTM_HIDDEN_SIZE[id],
-                             atten_size=ATTEN_SIZE[id], action_shape=ACTION_SHAPE[id]).float().to(device)
+                             atten_size=ATTEN_SIZE[id], action_space_shape=ACTION_SHAPE[id],
+                             action_out_size=ACTION_OUT_SIZE).float().to(device)
     target_model[id] = Network(cnn_out_size=CNN_OUT_SIZE[id], lstm_hidden_size=LSTM_HIDDEN_SIZE[id],
-                               atten_size=ATTEN_SIZE[id], action_shape=ACTION_SHAPE[id]).float().to(device)
+                               atten_size=ATTEN_SIZE[id], action_space_shape=ACTION_SHAPE[id],
+                               action_out_size=ACTION_OUT_SIZE).float().to(device)
 
     target_model[id].load_state_dict(main_model[id].state_dict())
     optimizer[id] = torch.optim.Adam(main_model[id].parameters(), lr=LR)
@@ -308,3 +311,5 @@ for episode in tqdm(range(start_episode, start_episode + TOTAL_EPSIODES)):
             "loss_stat": loss_stat,
             "reward_stat": reward_stat
         })
+
+writer.close()
