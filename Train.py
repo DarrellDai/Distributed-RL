@@ -16,7 +16,7 @@ from tqdm import tqdm
 from collections import deque
 
 AGENT_ID = (0, 1)
-CNN_OUT_SIZE = {0: 1000, 1: 1000}
+CNN_OUT_SIZE = {0: 500, 1: 500}
 LSTM_HIDDEN_SIZE = {0: 512, 1: 512}
 
 ACTION_SHAPE = {0: (3, 3), 1: (3, 3)}
@@ -34,7 +34,7 @@ TOTAL_EPSIODES = 2000
 MAX_STEPS = 200
 MEMORY_SIZE = 100
 PERFORMANCE_DISPLAY_INTERVAL = 20  # episodes
-CHECKPOINT_SAVE_INTERVAL = 10  # episodes
+CHECKPOINT_SAVE_INTERVAL = 25  # episodes
 UPDATE_FREQ = 5  # steps
 TARGET_UPDATE_FREQ = 500  # steps
 MAX_LOSS_STAT_LEN = 40
