@@ -27,7 +27,8 @@ def save_obj(obj, name):
 def save_checkpoint(state, dirname='Checkpoint'):
     if not os.path.exists(dirname):
         os.mkdir(dirname)
-    filename='Checkpoint_{}.pth.tar'.format(state['episode_count'])
+    filename = 'Checkpoint.pth.tar'
+    # filename='Checkpoint_{}.pth.tar'.format(state['episode_count'])
     filepath = os.path.join(dirname, filename)
     torch.save(state, filepath)
 

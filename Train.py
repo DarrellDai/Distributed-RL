@@ -8,6 +8,8 @@ from Experience_Replay import Memory
 from unity_wrappers.envs import MultiUnityWrapper
 from mlagents_envs.environment import UnityEnvironment
 from copy import deepcopy
+
+import os
 from utils import find_optimal_action, convert_to_array, save_checkpoint, find_latest_checkpoint, \
     load_checkpoint
 from tqdm import tqdm
@@ -16,27 +18,30 @@ from collections import deque
 AGENT_ID = (0, 1)
 CNN_OUT_SIZE = {0: 1000, 1: 1000}
 LSTM_HIDDEN_SIZE = {0: 512, 1: 512}
-ATTEN_SIZE = {0: 2, 1: 2}
+
 ACTION_SHAPE = {0: (3, 3), 1: (3, 3)}
 ACTION_OUT_SIZE = 32
 
+ATTEN_SIZE = {0: 15, 1: 15}
 BATCH_SIZE = 25
-TIME_STEP = 15
+TIME_STEP = 25
 LR = 0.00025
 GAMMA = 0.99
 INITIAL_EPSILON = 1.0
 FINAL_EPSILON = 0.1
-EPSILON_CHANGE_RATE = 0.99
-TOTAL_EPSIODES = 1200
-MAX_STEPS = 200
+EPSILON_CHANGE_RATE = 0.999
+TOTAL_EPSIODES = 2000
+MAX_STEPS = 50
 MEMORY_SIZE = 100
 PERFORMANCE_DISPLAY_INTERVAL = 20  # episodes
-CHECKPOINT_SAVE_INTERVAL = 50  # episodes
+CHECKPOINT_SAVE_INTERVAL = 10  # episodes
 UPDATE_FREQ = 5  # steps
 TARGET_UPDATE_FREQ = 500  # steps
 MAX_LOSS_STAT_LEN = 40
+MAX_REWARD_STAT_LEN = 40
 
 # # Parameters for testing
+# ATTEN_SIZE = {0: 15, 1: 15}
 # BATCH_SIZE = 2
 # TIME_STEP = 15
 # LR = 0.00025
@@ -52,6 +57,7 @@ MAX_LOSS_STAT_LEN = 40
 # CHECKPOINT_SAVE_INTERVAL = 2
 # TARGET_UPDATE_FREQ = 90  # steps
 # MAX_LOSS_STAT_LEN=40
+# MAX_REWARD_STAT_LEN=40
 
 resume = False
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -80,7 +86,8 @@ for id in AGENT_ID:
     target_model[id].load_state_dict(main_model[id].state_dict())
     optimizer[id] = torch.optim.Adam(main_model[id].parameters(), lr=LR)
 if resume:
-    checkpoint_to_load = find_latest_checkpoint()
+    # checkpoint_to_load = find_latest_checkpoint()
+    checkpoint_to_load = os.path.join('Checkpoint', 'Checkpoint.pth.tar')
     model_state_dicts, optimizer_state_dicts, total_steps, episode_count, epsilon, mem, loss_stat, reward_stat = load_checkpoint(
         checkpoint_to_load)
     start_episode = episode_count
@@ -149,7 +156,8 @@ for episode in tqdm(range(start_episode, start_episode + TOTAL_EPSIODES)):
         total_reward[id] = 0
         local_memory[id] = []
         alive[id] = True
-        hidden_state[id], cell_state[id], lstm_out[id] = main_model[id].module.lstm.init_hidden_states_and_outputs(bsize=1)
+        hidden_state[id], cell_state[id], lstm_out[id] = main_model[id].module.lstm.init_hidden_states_and_outputs(
+            bsize=1)
     done = False
     while step_count < MAX_STEPS and not done:
 
@@ -165,8 +173,9 @@ for episode in tqdm(range(start_episode, start_episode + TOTAL_EPSIODES)):
                 prev_obs[id][0] = torch.from_numpy(prev_obs[id][0]).float().to(device)
                 prev_obs[id][0] = prev_obs[id][0].reshape(1, 1, prev_obs[id][0].shape[0], prev_obs[id][0].shape[1],
                                                           prev_obs[id][0].shape[2])
-                model_out = main_model[id].module.forward(prev_obs[id][0], act[id], bsize=1, hidden_state=hidden_state[id],
-                                                   cell_state=cell_state[id], lstm_out=lstm_out[id])
+                model_out = main_model[id].module.forward(prev_obs[id][0], act[id], bsize=1,
+                                                          hidden_state=hidden_state[id],
+                                                          cell_state=cell_state[id], lstm_out=lstm_out[id])
 
                 hidden_state[id] = model_out[1][0]
                 cell_state[id] = model_out[1][1]
@@ -178,31 +187,21 @@ for episode in tqdm(range(start_episode, start_episode + TOTAL_EPSIODES)):
                 prev_obs[id][0] = torch.from_numpy(prev_obs[id][0]).float().to(device)
                 prev_obs[id][0] = prev_obs[id][0].reshape(1, 1, prev_obs[id][0].shape[0], prev_obs[id][0].shape[1],
                                                           prev_obs[id][0].shape[2])
-                model_out = main_model[id].module.forward(prev_obs[id][0], act=torch.zeros((1, 0, len(ACTION_SHAPE))), bsize=1,
-                                                   hidden_state=hidden_state[id],
-                                                   cell_state=cell_state[id], lstm_out=lstm_out[id])
+                model_out = main_model[id].module.forward(prev_obs[id][0], act=torch.zeros((1, 0, len(ACTION_SHAPE))),
+                                                          bsize=1,
+                                                          hidden_state=hidden_state[id],
+                                                          cell_state=cell_state[id], lstm_out=lstm_out[id])
 
                 act[id] = torch.from_numpy(find_optimal_action(model_out[2]))
-                model_out = main_model[id].module.forward(prev_obs[id][0], act[id], bsize=1, hidden_state=hidden_state[id],
-                                                   cell_state=cell_state[id], lstm_out=lstm_out[id])
+                model_out = main_model[id].module.forward(prev_obs[id][0], act[id], bsize=1,
+                                                          hidden_state=hidden_state[id],
+                                                          cell_state=cell_state[id], lstm_out=lstm_out[id])
                 hidden_state[id] = model_out[1][0]
                 cell_state[id] = model_out[1][1]
                 lstm_out[id] = model_out[0]
 
         obs_dict, reward_dict, done_dict, info_dict = env.step(act)
         done = done_dict["__all__"]
-
-        for id in AGENT_ID:
-            total_reward[id] += reward_dict[id]
-
-            prev_obs[id][0] = prev_obs[id][0].reshape(prev_obs[id][0].shape[2], prev_obs[id][0].shape[3],
-                                                      prev_obs[id][0].shape[4])
-            act[id] = act[id].reshape(-1)
-
-            local_memory[id].append(
-                (deepcopy(prev_obs[id]), deepcopy(act[id]), deepcopy(reward_dict[id]), deepcopy(obs_dict[id])))
-
-        prev_obs = deepcopy(obs_dict)
 
         if (total_steps % TARGET_UPDATE_FREQ) == 0:
             for id in AGENT_ID:
@@ -253,18 +252,20 @@ for episode in tqdm(range(start_episode, start_episode + TOTAL_EPSIODES)):
                 for batch_idx in range(BATCH_SIZE):
                     if next_vector_obs[batch_idx][0][0] == 1:
                         _, _, Q_next, _, _ = target_model[id].module.forward(visual_obs[batch_idx:batch_idx + 1],
-                                                                      act[batch_idx:batch_idx + 1],
-                                                                      bsize=1,
-                                                                      hidden_state=hidden_batch[:,
-                                                                                   batch_idx:batch_idx + 1],
-                                                                      cell_state=cell_batch[:, batch_idx:batch_idx + 1],
-                                                                      lstm_out=out_batch[batch_idx:batch_idx + 1])
+                                                                             act[batch_idx:batch_idx + 1],
+                                                                             bsize=1,
+                                                                             hidden_state=hidden_batch[:,
+                                                                                          batch_idx:batch_idx + 1],
+                                                                             cell_state=cell_batch[:,
+                                                                                        batch_idx:batch_idx + 1],
+                                                                             lstm_out=out_batch[
+                                                                                      batch_idx:batch_idx + 1])
                         Q_next_max[batch_idx] = torch.max(Q_next.reshape(-1))
                 target_values = rewards[:, TIME_STEP - 1] + (GAMMA * Q_next_max)
                 target_values = target_values.float()
                 _, _, Q_s, _, _ = main_model[id].module.forward(current_visual_obs, act, bsize=BATCH_SIZE,
-                                                         hidden_state=hidden_batch, cell_state=cell_batch,
-                                                         lstm_out=out_batch)
+                                                                hidden_state=hidden_batch, cell_state=cell_batch,
+                                                                lstm_out=out_batch)
 
                 Q_s_a = Q_s[:, 0, 0]
                 loss = criterion(Q_s_a, target_values)
@@ -304,7 +305,6 @@ for episode in tqdm(range(start_episode, start_episode + TOTAL_EPSIODES)):
         save_checkpoint({
             'model_state_dicts': model_state_dicts,
             'optimizer_state_dicts': optimizer_state_dicts,
-            'attn_len': ATTEN_SIZE,
             'epsilon': epsilon,
             'total_steps': total_steps,
             "episode_count": episode_count,
