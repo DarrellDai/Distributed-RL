@@ -21,7 +21,7 @@ class Network(nn.Module):
         self.resnet = resnet18(num_classes=cnn_out_size).to(self.device)
         self.lstm = LSTM(cnn_out_size + action_out_size, lstm_hidden_size, atten_size).to(self.device)
         self.dqn = DQN(lstm_hidden_size).to(self.device)
-        self.actnet = ActNet(len(action_space_shape), action_out_size)
+        self.actnet = ActNet(len(action_space_shape), action_out_size).to(self.device)
 
     '''
     obs(torch.Tensor): observations
@@ -56,7 +56,7 @@ class Network(nn.Module):
             lstm_out, (hidden_state, cell_state) = self.lstm.forward(obs_act, bsize, hidden_state, cell_state,
                                                                      lstm_out)
 
-        if obs.shape[1] > act.shape[1]:
+        if obs.shape[0] > act.shape[0]:
             # Used to retrieve action index
             action_matrix = np.zeros(self.action_shape)
             # Output of LSTM for all possible actions
