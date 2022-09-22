@@ -10,7 +10,8 @@ from mlagents_envs.environment import UnityEnvironment
 from copy import deepcopy
 
 import os
-from utils import find_optimal_action, convert_to_array, save_checkpoint, find_latest_checkpoint, \
+from utils import find_optimal_action, convert_to_array, find_hidden_cell_out_of_an_action, combine_out, \
+    save_checkpoint, find_latest_checkpoint, \
     load_checkpoint
 from tqdm import tqdm
 from collections import deque
@@ -22,42 +23,42 @@ LSTM_HIDDEN_SIZE = {0: 512, 1: 512}
 ACTION_SHAPE = {0: (3, 3), 1: (3, 3)}
 ACTION_OUT_SIZE = 32
 
-ATTEN_SIZE = {0: 15, 1: 15}
-BATCH_SIZE = 25
-TIME_STEP = 25
-LR = 0.00025
-GAMMA = 0.99
-INITIAL_EPSILON = 1.0
-FINAL_EPSILON = 0.1
-EPSILON_CHANGE_RATE = 0.999
-TOTAL_EPSIODES = 2000
-MAX_STEPS = 200
-MEMORY_SIZE = 100
-PERFORMANCE_DISPLAY_INTERVAL = 20  # episodes
-CHECKPOINT_SAVE_INTERVAL = 25  # episodes
-UPDATE_FREQ = 5  # steps
-TARGET_UPDATE_FREQ = 500  # steps
-MAX_LOSS_STAT_LEN = 40
-MAX_REWARD_STAT_LEN = 40
-
-# # Parameters for testing
 # ATTEN_SIZE = {0: 15, 1: 15}
-# BATCH_SIZE = 2
-# TIME_STEP = 15
+# BATCH_SIZE = 25
+# TIME_STEP = 25
 # LR = 0.00025
 # GAMMA = 0.99
 # INITIAL_EPSILON = 1.0
 # FINAL_EPSILON = 0.1
-# EPSILON_CHANGE_RATE=0.99
-# TOTAL_EPSIODES = 30
-# MAX_STEPS = 100
-# MEMORY_SIZE = 2
-# UPDATE_FREQ = 2
-# PERFORMANCE_DISPLAY_INTERVAL = 2
-# CHECKPOINT_SAVE_INTERVAL = 2
-# TARGET_UPDATE_FREQ = 90  # steps
-# MAX_LOSS_STAT_LEN=40
-# MAX_REWARD_STAT_LEN=40
+# EPSILON_CHANGE_RATE = 0.999
+# TOTAL_EPSIODES = 2000
+# MAX_STEPS = 200
+# MEMORY_SIZE = 100
+# PERFORMANCE_DISPLAY_INTERVAL = 20  # episodes
+# CHECKPOINT_SAVE_INTERVAL = 25  # episodes
+# UPDATE_FREQ = 5  # steps
+# TARGET_UPDATE_FREQ = 500  # steps
+# MAX_LOSS_STAT_LEN = 40
+# MAX_REWARD_STAT_LEN = 40
+
+# Parameters for testing
+ATTEN_SIZE = {0: 2, 1: 2}
+BATCH_SIZE = 2
+TIME_STEP = 15
+LR = 0.00025
+GAMMA = 0.99
+INITIAL_EPSILON = 0
+FINAL_EPSILON = 0
+EPSILON_CHANGE_RATE = 0.99
+TOTAL_EPSIODES = 30
+MAX_STEPS = 30
+MEMORY_SIZE = 2
+UPDATE_FREQ = 1
+PERFORMANCE_DISPLAY_INTERVAL = 2
+CHECKPOINT_SAVE_INTERVAL = 2
+TARGET_UPDATE_FREQ = 90  # steps
+MAX_LOSS_STAT_LEN = 40
+MAX_REWARD_STAT_LEN = 40
 
 resume = False
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -187,19 +188,27 @@ for episode in tqdm(range(start_episode, start_episode + TOTAL_EPSIODES)):
                 prev_obs[id][0] = torch.from_numpy(prev_obs[id][0]).float().to(device)
                 prev_obs[id][0] = prev_obs[id][0].reshape(1, 1, prev_obs[id][0].shape[0], prev_obs[id][0].shape[1],
                                                           prev_obs[id][0].shape[2])
-                model_out = main_model[id].module.forward(prev_obs[id][0], act=torch.zeros((1, 0, len(ACTION_SHAPE))),
-                                                          bsize=1,
-                                                          hidden_state=hidden_state[id],
-                                                          cell_state=cell_state[id], lstm_out=lstm_out[id])
+                lo, (hs, cs), dqn_out, out_per_action, (
+                    hidden_state_per_action, cell_state_per_action) = main_model[id].module.forward(prev_obs[id][0],
+                                                                                                    act=torch.zeros((1,
+                                                                                                                     0,
+                                                                                                                     len(ACTION_SHAPE))),
+                                                                                                    bsize=1,
+                                                                                                    hidden_state=
+                                                                                                    hidden_state[id],
+                                                                                                    cell_state=
+                                                                                                    cell_state[id],
+                                                                                                    lstm_out=lstm_out[
+                                                                                                        id])
 
-                act[id] = torch.from_numpy(find_optimal_action(model_out[2]))
-                model_out = main_model[id].module.forward(prev_obs[id][0], act[id], bsize=1,
-                                                          hidden_state=hidden_state[id],
-                                                          cell_state=cell_state[id], lstm_out=lstm_out[id])
-                hidden_state[id] = model_out[1][0]
-                cell_state[id] = model_out[1][1]
-                lstm_out[id] = model_out[0]
-
+                act[id] = torch.from_numpy(find_optimal_action(dqn_out))
+                hidden_state[id], cell_state[id], lo_new = find_hidden_cell_out_of_an_action(act[id],
+                                                                                             hidden_state_per_action,
+                                                                                             cell_state_per_action,
+                                                                                             out_per_action)
+                lstm_out[id] = combine_out(lo, lo_new.to(device), ATTEN_SIZE[id])
+                hidden_state[id] = hidden_state[id].to(device)
+                cell_state[id] = cell_state[id].to(device)
         obs_dict, reward_dict, done_dict, info_dict = env.step(act)
         done = done_dict["__all__"]
 
