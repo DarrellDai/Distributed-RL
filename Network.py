@@ -36,6 +36,8 @@ class Network(nn.Module):
     def forward(self, obs, act, bsize, hidden_state, cell_state, lstm_out):
         obs = obs.float().to(self.device)
         act = act.float().to(self.device)
+        obs_len=obs.shape[1]
+        act_len=act.shape[1]
         if len(obs.shape) == 5:
             obs = obs.reshape(bsize * obs.shape[1], obs.shape[4], obs.shape[2], obs.shape[3])
         elif len(obs.shape) == 4:
@@ -56,7 +58,7 @@ class Network(nn.Module):
             lstm_out, (hidden_state, cell_state) = self.lstm.forward(obs_act, bsize, hidden_state, cell_state,
                                                                      lstm_out)
 
-        if obs.shape[0] > act.shape[0]:
+        if obs_len > act_len:
             # Used to retrieve action index
             action_matrix = np.zeros(self.action_shape)
             # Output of LSTM for all possible actions
