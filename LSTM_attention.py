@@ -26,6 +26,8 @@ class LSTM(nn.Module):
 
     # Input must be tensor
     def forward(self, x, hidden_state, cell_state, out):
+        hidden_state = hidden_state.reshape((hidden_state.shape[1], hidden_state.shape[0]) + hidden_state.shape[2:])
+        cell_state = cell_state.reshape((cell_state.shape[1], cell_state.shape[0]) + cell_state.shape[2:])
         x = x.reshape(x.shape[0], -1, self.input_size).float().to(self.device)
         for T in range(x.shape[1]):
             # Calculate weighted outputs as attention to make new input by concatenating with the input
@@ -45,6 +47,8 @@ class LSTM(nn.Module):
             out = torch.concat((out, single_out), 1)
             start_outs = max(0, out.shape[1] - self.atten_size)
             out = out[:, start_outs:, :]
+            hidden_state = hidden_state.reshape((hidden_state.shape[1], hidden_state.shape[0]) + hidden_state.shape[2:])
+            cell_state = cell_state.reshape((cell_state.shape[1], cell_state.shape[0]) + cell_state.shape[2:])
         return out, (hidden_state, cell_state)
 
     # '''
