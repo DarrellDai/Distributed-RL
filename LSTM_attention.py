@@ -25,8 +25,8 @@ class LSTM(nn.Module):
     '''
 
     # Input must be tensor
-    def forward(self, x, bsize, hidden_state, cell_state, out):
-        x = x.reshape(bsize, -1, self.input_size).float().to(self.device)
+    def forward(self, x, hidden_state, cell_state, out):
+        x = x.reshape(x.shape[0], -1, self.input_size).float().to(self.device)
         for T in range(x.shape[1]):
             # Calculate weighted outputs as attention to make new input by concatenating with the input
             if out.shape[1] > 1:
