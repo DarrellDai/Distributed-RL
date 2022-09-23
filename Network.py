@@ -58,7 +58,7 @@ class Network(nn.Module):
             # Forward until in the last one the batch, so the attention is of the last one.
             # previous_hidden_state and previous_cell_state can be used to calculate the output for last obs and act.
             # The reason of doing this is because, unlike previous ones, the last one is not (obs,act) pair but only obs
-            lstm_out, (hidden_state, cell_state) = self.lstm.forward(obs_act, bsize, hidden_state, cell_state,
+            lstm_out, (hidden_state, cell_state) = self.lstm.forward(obs_act, hidden_state, cell_state,
                                                                      lstm_out)
 
         if obs_len > act_len:
@@ -81,7 +81,7 @@ class Network(nn.Module):
                 proposed_act_out = self.actnet.forward(proposed_acts)
                 obs_act = torch.concat((resnet_out[:, -1:, :], proposed_act_out), -1)
                 lstm_out_all_act, (hidden_state_per_action[:, :, idx[0], idx[1], :],
-                                   cell_state_per_action[:, :, idx[0], idx[1], :]) = self.lstm.forward(obs_act, bsize,
+                                   cell_state_per_action[:, :, idx[0], idx[1], :]) = self.lstm.forward(obs_act,
                                                                                                        hidden_state,
                                                                                                        cell_state,
                                                                                                        lstm_out)
