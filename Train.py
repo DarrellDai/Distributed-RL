@@ -60,7 +60,7 @@ TARGET_UPDATE_FREQ = 90  # steps
 MAX_LOSS_STAT_LEN = 40
 MAX_REWARD_STAT_LEN = 40
 
-resume = True
+resume = False
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 mem = Memory(memsize=MEMORY_SIZE, agent_ids=AGENT_ID)
 criterion = nn.MSELoss()
