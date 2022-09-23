@@ -37,8 +37,6 @@ class Network(nn.Module):
         bsize=obs.shape[0]
         obs = obs.float().to(self.device)
         act = act.float().to(self.device)
-        hidden_state = hidden_state.reshape((hidden_state.shape[1], hidden_state.shape[0]) + hidden_state.shape[2:])
-        cell_state = cell_state.reshape((cell_state.shape[1], cell_state.shape[0]) + cell_state.shape[2:])
         obs_len = obs.shape[1]
         act_len = act.shape[1]
         if len(obs.shape) == 5:
@@ -88,8 +86,6 @@ class Network(nn.Module):
                 out_per_action[:, :, idx[0], idx[1], :] = lstm_out_all_act[:, -1:, :]
             # Q-value for all possible actions after all previous obseravtions and actions
             dqn_out = self.dqn(out_per_action).squeeze(-1).squeeze(1).float()
-            hidden_state = hidden_state.reshape((hidden_state.shape[1], hidden_state.shape[0]) + hidden_state.shape[2:])
-            cell_state = cell_state.reshape((cell_state.shape[1], cell_state.shape[0]) + cell_state.shape[2:])
             return lstm_out, (hidden_state, cell_state), dqn_out, out_per_action, (
                 hidden_state_per_action, cell_state_per_action)
         else:
@@ -97,8 +93,6 @@ class Network(nn.Module):
                 self.device)
             out_per_action[:, :, 0, 0, :] = lstm_out[:, -1:, :]
             dqn_out = self.dqn(out_per_action).squeeze(-1).squeeze(1).float()
-            hidden_state = hidden_state.reshape((hidden_state.shape[1], hidden_state.shape[0]) + hidden_state.shape[2:])
-            cell_state = cell_state.reshape((cell_state.shape[1], cell_state.shape[0]) + cell_state.shape[2:])
             return lstm_out, (hidden_state, cell_state), dqn_out, None, (None, None)
 
     def generate_action_matrix(self):
