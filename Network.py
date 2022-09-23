@@ -14,6 +14,7 @@ class Network(nn.Module):
 
     def __init__(self, cnn_out_size, action_space_shape, action_out_size, lstm_hidden_size, atten_size):
         super(Network, self).__init__()
+        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.action_shape = action_space_shape
         self.cnn_out_size = cnn_out_size
         self.action_out_size = action_out_size
