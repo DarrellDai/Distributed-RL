@@ -170,65 +170,66 @@ for episode in tqdm(range(start_episode, start_episode + TOTAL_EPSIODES)):
         step_count += 1
         total_steps += 1
         act = {}
-        if np.random.rand(1) < epsilon:
+        with torch.no_grad():
+            if np.random.rand(1) < epsilon:
+                for id in AGENT_ID:
+                    act[id] = ()
+                    for n in main_model[id].module.action_shape:
+                        act[id] += (np.random.randint(0, n),)
+                    act[id] = torch.tensor(act[id]).reshape(1, 1, len(act[id])).to(device)
+                    prev_obs[id][0] = torch.from_numpy(prev_obs[id][0]).float().to(device)
+                    prev_obs[id][0] = prev_obs[id][0].reshape(1, 1, prev_obs[id][0].shape[0], prev_obs[id][0].shape[1],
+                                                              prev_obs[id][0].shape[2])
+                    model_out = main_model[id](prev_obs[id][0], act[id],
+                                                              hidden_state=hidden_state[id],
+                                                              cell_state=cell_state[id], lstm_out=lstm_out[id])
+
+                    hidden_state[id] = model_out[1][0]
+                    cell_state[id] = model_out[1][1]
+                    lstm_out[id] = model_out[0]
+
+
+            else:
+                for id in AGENT_ID:
+                    prev_obs[id][0] = torch.from_numpy(prev_obs[id][0]).float().to(device)
+                    prev_obs[id][0] = prev_obs[id][0].reshape(1, 1, prev_obs[id][0].shape[0], prev_obs[id][0].shape[1],
+                                                              prev_obs[id][0].shape[2])
+                    lo, (hs, cs), dqn_out, out_per_action, (
+                        hidden_state_per_action, cell_state_per_action) = main_model[id](prev_obs[id][0],
+                                                                                                        act=torch.zeros((1,
+                                                                                                                         0,
+                                                                                                                         len(ACTION_SHAPE))).to(
+                                                                                                            device),
+                                                                                                        hidden_state=
+                                                                                                        hidden_state[id],
+                                                                                                        cell_state=
+                                                                                                        cell_state[id],
+                                                                                                        lstm_out=lstm_out[
+                                                                                                            id])
+
+                    act[id] = torch.from_numpy(find_optimal_action(dqn_out))
+                    hidden_state[id], cell_state[id], lo_new = find_hidden_cell_out_of_an_action(act[id],
+                                                                                                 hidden_state_per_action,
+                                                                                                 cell_state_per_action,
+                                                                                                 out_per_action)
+                    lstm_out[id] = combine_out(lo, lo_new.to(device), ATTEN_SIZE[id])
+                    hidden_state[id] = hidden_state[id].to(device)
+                    cell_state[id] = cell_state[id].to(device)
+            obs_dict, reward_dict, done_dict, info_dict = env.step(act)
+
+            done = done_dict["__all__"]
+
             for id in AGENT_ID:
-                act[id] = ()
-                for n in main_model[id].module.action_shape:
-                    act[id] += (np.random.randint(0, n),)
-                act[id] = torch.tensor(act[id]).reshape(1, 1, len(act[id])).to(device)
-                prev_obs[id][0] = torch.from_numpy(prev_obs[id][0]).float().to(device)
-                prev_obs[id][0] = prev_obs[id][0].reshape(1, 1, prev_obs[id][0].shape[0], prev_obs[id][0].shape[1],
-                                                          prev_obs[id][0].shape[2])
-                model_out = main_model[id](prev_obs[id][0], act[id],
-                                                          hidden_state=hidden_state[id],
-                                                          cell_state=cell_state[id], lstm_out=lstm_out[id])
+                total_reward[id] += reward_dict[id]
 
-                hidden_state[id] = model_out[1][0]
-                cell_state[id] = model_out[1][1]
-                lstm_out[id] = model_out[0]
+                prev_obs[id][0] = prev_obs[id][0].reshape(prev_obs[id][0].shape[2], prev_obs[id][0].shape[3],
+                                                          prev_obs[id][0].shape[4])
+                act[id] = act[id].reshape(-1)
 
+                local_memory[id].append(
+                    (deepcopy(prev_obs[id]), deepcopy(act[id]), deepcopy(reward_dict[id]), deepcopy(obs_dict[id])))
 
-        else:
-            for id in AGENT_ID:
-                prev_obs[id][0] = torch.from_numpy(prev_obs[id][0]).float().to(device)
-                prev_obs[id][0] = prev_obs[id][0].reshape(1, 1, prev_obs[id][0].shape[0], prev_obs[id][0].shape[1],
-                                                          prev_obs[id][0].shape[2])
-                lo, (hs, cs), dqn_out, out_per_action, (
-                    hidden_state_per_action, cell_state_per_action) = main_model[id](prev_obs[id][0],
-                                                                                                    act=torch.zeros((1,
-                                                                                                                     0,
-                                                                                                                     len(ACTION_SHAPE))).to(
-                                                                                                        device),
-                                                                                                    hidden_state=
-                                                                                                    hidden_state[id],
-                                                                                                    cell_state=
-                                                                                                    cell_state[id],
-                                                                                                    lstm_out=lstm_out[
-                                                                                                        id])
-
-                act[id] = torch.from_numpy(find_optimal_action(dqn_out))
-                hidden_state[id], cell_state[id], lo_new = find_hidden_cell_out_of_an_action(act[id],
-                                                                                             hidden_state_per_action,
-                                                                                             cell_state_per_action,
-                                                                                             out_per_action)
-                lstm_out[id] = combine_out(lo, lo_new.to(device), ATTEN_SIZE[id])
-                hidden_state[id] = hidden_state[id].to(device)
-                cell_state[id] = cell_state[id].to(device)
-        obs_dict, reward_dict, done_dict, info_dict = env.step(act)
-
-        done = done_dict["__all__"]
-
-        for id in AGENT_ID:
-            total_reward[id] += reward_dict[id]
-
-            prev_obs[id][0] = prev_obs[id][0].reshape(prev_obs[id][0].shape[2], prev_obs[id][0].shape[3],
-                                                      prev_obs[id][0].shape[4])
-            act[id] = act[id].reshape(-1)
-
-            local_memory[id].append(
-                (deepcopy(prev_obs[id]), deepcopy(act[id]), deepcopy(reward_dict[id]), deepcopy(obs_dict[id])))
-
-        prev_obs = deepcopy(obs_dict)
+            prev_obs = deepcopy(obs_dict)
 
         if (total_steps % TARGET_UPDATE_FREQ) == 0:
             for id in AGENT_ID:
