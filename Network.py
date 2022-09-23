@@ -14,14 +14,13 @@ class Network(nn.Module):
 
     def __init__(self, cnn_out_size, action_space_shape, action_out_size, lstm_hidden_size, atten_size):
         super(Network, self).__init__()
-        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.action_shape = action_space_shape
         self.cnn_out_size = cnn_out_size
         self.action_out_size = action_out_size
-        self.resnet = resnet18(num_classes=cnn_out_size).to(self.device)
-        self.lstm = LSTM(cnn_out_size + action_out_size, lstm_hidden_size, atten_size).to(self.device)
-        self.dqn = DQN(lstm_hidden_size).to(self.device)
-        self.actnet = ActNet(len(action_space_shape), action_out_size).to(self.device)
+        self.resnet = resnet18(num_classes=cnn_out_size)
+        self.lstm = LSTM(cnn_out_size + action_out_size, lstm_hidden_size, atten_size)
+        self.dqn = DQN(lstm_hidden_size)
+        self.actnet = ActNet(len(action_space_shape), action_out_size)
 
     '''
     obs(torch.Tensor): observations
