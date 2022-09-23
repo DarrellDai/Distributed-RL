@@ -179,7 +179,7 @@ for episode in tqdm(range(start_episode, start_episode + TOTAL_EPSIODES)):
                 prev_obs[id][0] = torch.from_numpy(prev_obs[id][0]).float().to(device)
                 prev_obs[id][0] = prev_obs[id][0].reshape(1, 1, prev_obs[id][0].shape[0], prev_obs[id][0].shape[1],
                                                           prev_obs[id][0].shape[2])
-                model_out = main_model[id].module.forward(prev_obs[id][0], act[id], bsize=1,
+                model_out = main_model[id].module.forward(prev_obs[id][0], act[id],
                                                           hidden_state=hidden_state[id],
                                                           cell_state=cell_state[id], lstm_out=lstm_out[id])
 
@@ -199,7 +199,6 @@ for episode in tqdm(range(start_episode, start_episode + TOTAL_EPSIODES)):
                                                                                                                      0,
                                                                                                                      len(ACTION_SHAPE))).to(
                                                                                                         device),
-                                                                                                    bsize=1,
                                                                                                     hidden_state=
                                                                                                     hidden_state[id],
                                                                                                     cell_state=
@@ -281,7 +280,6 @@ for episode in tqdm(range(start_episode, start_episode + TOTAL_EPSIODES)):
                     if next_vector_obs[batch_idx][0][0] == 1:
                         _, _, Q_next, _, _ = target_model[id].module.forward(visual_obs[batch_idx:batch_idx + 1],
                                                                              act[batch_idx:batch_idx + 1],
-                                                                             bsize=1,
                                                                              hidden_state=hidden_batch[
                                                                                           batch_idx:batch_idx + 1],
                                                                              cell_state=cell_batch[
@@ -291,7 +289,7 @@ for episode in tqdm(range(start_episode, start_episode + TOTAL_EPSIODES)):
                         Q_next_max[batch_idx] = torch.max(Q_next.reshape(-1))
                 target_values = rewards[:, TIME_STEP - 1] + (GAMMA * Q_next_max)
                 target_values = target_values.float()
-                _, _, Q_s, _, _ = main_model[id].module.forward(current_visual_obs, act, bsize=BATCH_SIZE,
+                _, _, Q_s, _, _ = main_model[id].module.forward(current_visual_obs, act,
                                                                 hidden_state=hidden_batch, cell_state=cell_batch,
                                                                 lstm_out=out_batch)
 

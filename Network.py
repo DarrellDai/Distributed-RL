@@ -33,7 +33,8 @@ class Network(nn.Module):
     lstm_out(torch.Tensor)
     '''
 
-    def forward(self, obs, act, bsize, hidden_state, cell_state, lstm_out):
+    def forward(self, obs, act, hidden_state, cell_state, lstm_out):
+        bsize=obs.shape[0]
         obs = obs.float().to(self.device)
         act = act.float().to(self.device)
         hidden_state = hidden_state.reshape((hidden_state.shape[1], hidden_state.shape[0]) + hidden_state.shape[2:])
