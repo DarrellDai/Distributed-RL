@@ -36,10 +36,10 @@ class Network(nn.Module):
     def forward(self, obs, act, bsize, hidden_state, cell_state, lstm_out):
         obs = obs.float().to(self.device)
         act = act.float().to(self.device)
-        hidden_state=hidden_state.reshape((1,hidden_state.shape[0])+hidden_state.shape[2:])
-        cell_state = cell_state.reshape((1, hidden_state.shape[0]) + hidden_state.shape[2:])
-        obs_len=obs.shape[1]
-        act_len=act.shape[1]
+        hidden_state = hidden_state.reshape((hidden_state.shape[1], hidden_state.shape[0]) + hidden_state.shape[2:])
+        cell_state = cell_state.reshape((cell_state[1], cell_state[0]) + cell_state.shape[2:])
+        obs_len = obs.shape[1]
+        act_len = act.shape[1]
         if len(obs.shape) == 5:
             obs = obs.reshape(bsize * obs.shape[1], obs.shape[4], obs.shape[2], obs.shape[3])
         elif len(obs.shape) == 4:
