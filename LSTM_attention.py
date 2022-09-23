@@ -72,7 +72,7 @@ class LSTM(nn.Module):
     #     out=lstm_out[0]
     #     return out, (hidden_state, cell_state)
     def init_hidden_states_and_outputs(self, bsize):
-        h = torch.zeros(1, bsize, self.hidden_size).float().to(self.device)
-        c = torch.zeros(1, bsize, self.hidden_size).float().to(self.device)
+        h = torch.zeros(bsize, 1, self.hidden_size).float().to(self.device)
+        c = torch.zeros(bsize, 1, self.hidden_size).float().to(self.device)
         o = torch.zeros(bsize, 1, self.hidden_size).float().to(self.device)
         return h, c, o
