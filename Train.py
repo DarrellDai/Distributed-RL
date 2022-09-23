@@ -23,44 +23,44 @@ LSTM_HIDDEN_SIZE = {0: 512, 1: 512}
 ACTION_SHAPE = {0: (3, 3), 1: (3, 3)}
 ACTION_OUT_SIZE = 32
 
-# ATTEN_SIZE = {0: 15, 1: 15}
-# BATCH_SIZE = 25
-# TIME_STEP = 25
-# LR = 0.00025
-# GAMMA = 0.99
-# INITIAL_EPSILON = 1.0
-# FINAL_EPSILON = 0.1
-# EPSILON_CHANGE_RATE = 0.999
-# TOTAL_EPSIODES = 2000
-# MAX_STEPS = 200
-# MEMORY_SIZE = 100
-# PERFORMANCE_DISPLAY_INTERVAL = 20  # episodes
-# CHECKPOINT_SAVE_INTERVAL = 25  # episodes
-# UPDATE_FREQ = 5  # steps
-# TARGET_UPDATE_FREQ = 500  # steps
-# MAX_LOSS_STAT_LEN = 40
-# MAX_REWARD_STAT_LEN = 40
-
-# Parameters for testing
-ATTEN_SIZE = {0: 2, 1: 2}
-BATCH_SIZE = 2
-TIME_STEP = 15
+ATTEN_SIZE = {0: 15, 1: 15}
+BATCH_SIZE = 25
+TIME_STEP = 25
 LR = 0.00025
 GAMMA = 0.99
-INITIAL_EPSILON = 0
-FINAL_EPSILON = 0
-EPSILON_CHANGE_RATE = 0.99
-TOTAL_EPSIODES = 30
-MAX_STEPS = 30
-MEMORY_SIZE = 2
-UPDATE_FREQ = 1
-PERFORMANCE_DISPLAY_INTERVAL = 2
-CHECKPOINT_SAVE_INTERVAL = 2
-TARGET_UPDATE_FREQ = 90  # steps
+INITIAL_EPSILON = 1.0
+FINAL_EPSILON = 0.1
+EPSILON_CHANGE_RATE = 0.999
+TOTAL_EPSIODES = 2000
+MAX_STEPS = 200
+MEMORY_SIZE = 100
+PERFORMANCE_DISPLAY_INTERVAL = 20  # episodes
+CHECKPOINT_SAVE_INTERVAL = 25  # episodes
+UPDATE_FREQ = 5  # steps
+TARGET_UPDATE_FREQ = 500  # steps
 MAX_LOSS_STAT_LEN = 40
 MAX_REWARD_STAT_LEN = 40
 
-resume = False
+# # Parameters for testing
+# ATTEN_SIZE = {0: 2, 1: 2}
+# BATCH_SIZE = 2
+# TIME_STEP = 15
+# LR = 0.00025
+# GAMMA = 0.99
+# INITIAL_EPSILON = 0
+# FINAL_EPSILON = 0
+# EPSILON_CHANGE_RATE = 0.99
+# TOTAL_EPSIODES = 30
+# MAX_STEPS = 30
+# MEMORY_SIZE = 2
+# UPDATE_FREQ = 1
+# PERFORMANCE_DISPLAY_INTERVAL = 2
+# CHECKPOINT_SAVE_INTERVAL = 2
+# TARGET_UPDATE_FREQ = 90  # steps
+# MAX_LOSS_STAT_LEN = 40
+# MAX_REWARD_STAT_LEN = 40
+
+resume = True
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 mem = Memory(memsize=MEMORY_SIZE, agent_ids=AGENT_ID)
 criterion = nn.MSELoss()
@@ -78,12 +78,14 @@ optimizer = {}
 for id in AGENT_ID:
     main_model[id] = Network(cnn_out_size=CNN_OUT_SIZE[id], lstm_hidden_size=LSTM_HIDDEN_SIZE[id],
                              atten_size=ATTEN_SIZE[id], action_space_shape=ACTION_SHAPE[id],
-                             action_out_size=ACTION_OUT_SIZE).float().to(device)
+                             action_out_size=ACTION_OUT_SIZE)
     target_model[id] = Network(cnn_out_size=CNN_OUT_SIZE[id], lstm_hidden_size=LSTM_HIDDEN_SIZE[id],
                                atten_size=ATTEN_SIZE[id], action_space_shape=ACTION_SHAPE[id],
-                               action_out_size=ACTION_OUT_SIZE).float().to(device)
+                               action_out_size=ACTION_OUT_SIZE)
     main_model[id] = nn.DataParallel(main_model[id], device_ids=[5, 6, 7])
     target_model[id] = nn.DataParallel(target_model[id], device_ids=[5, 6, 7])
+    main_model[id]=main_model[id].to(device)
+    target_model[id]=target_model[id].to(device)
     target_model[id].load_state_dict(main_model[id].state_dict())
     optimizer[id] = torch.optim.Adam(main_model[id].parameters(), lr=LR)
 if resume:
