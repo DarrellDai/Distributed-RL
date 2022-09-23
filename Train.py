@@ -67,8 +67,8 @@ criterion = nn.MSELoss()
 
 writer = SummaryWriter()
 
-# env_path = '../Env/Hide and Seek'
-env_path = 'D:/Unity Projects/Hide and Seek/Env/Hide and Seek'
+env_path = '../Env/Hide and Seek'
+# env_path = 'D:/Unity Projects/Hide and Seek/Env/Hide and Seek'
 unity_env = UnityEnvironment(env_path)
 env = MultiUnityWrapper(unity_env=unity_env, uint8_visual=True, allow_multiple_obs=True)
 
@@ -83,10 +83,10 @@ for id in AGENT_ID:
     target_model[id] = Network(cnn_out_size=CNN_OUT_SIZE[id], lstm_hidden_size=LSTM_HIDDEN_SIZE[id],
                                atten_size=ATTEN_SIZE[id], action_space_shape=ACTION_SHAPE[id],
                                action_out_size=ACTION_OUT_SIZE)
-    # main_model[id] = nn.DataParallel(main_model[id], device_ids=[5, 6, 7])
-    # target_model[id] = nn.DataParallel(target_model[id], device_ids=[5, 6, 7])
-    main_model[id] = nn.DataParallel(main_model[id], device_ids=[0])
-    target_model[id] = nn.DataParallel(target_model[id], device_ids=[0])
+    main_model[id] = nn.DataParallel(main_model[id], device_ids=[5, 6, 7])
+    target_model[id] = nn.DataParallel(target_model[id], device_ids=[5, 6, 7])
+    # main_model[id] = nn.DataParallel(main_model[id], device_ids=[0])
+    # target_model[id] = nn.DataParallel(target_model[id], device_ids=[0])
     main_model[id] = main_model[id].to(device)
     target_model[id] = target_model[id].to(device)
     target_model[id].load_state_dict(main_model[id].state_dict())
