@@ -40,6 +40,7 @@ class LSTM(nn.Module):
                 x_new = torch.concat((x[:, T:T + 1, :], atten), 2)
             else:
                 x_new = torch.concat((x[:, 0:1, :], out), 2)
+            self.lstm_layer.flatten_parameters()
             lstm_out = self.lstm_layer(x_new, (hidden_state, cell_state))
             hidden_state = lstm_out[1][0]
             cell_state = lstm_out[1][1]
