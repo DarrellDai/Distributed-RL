@@ -23,42 +23,42 @@ LSTM_HIDDEN_SIZE = {0: 512, 1: 512}
 ACTION_SHAPE = {0: (3, 3), 1: (3, 3)}
 ACTION_OUT_SIZE = 32
 
-ATTEN_SIZE = {0: 15, 1: 15}
-BATCH_SIZE = 25
-TIME_STEP = 25
-LR = 0.00025
-GAMMA = 0.99
-INITIAL_EPSILON = 1.0
-FINAL_EPSILON = 0.1
-EPSILON_CHANGE_RATE = 0.999
-TOTAL_EPSIODES = 2000
-MAX_STEPS = 200
-MEMORY_SIZE = 100
-PERFORMANCE_DISPLAY_INTERVAL = 20  # episodes
-CHECKPOINT_SAVE_INTERVAL = 25  # episodes
-UPDATE_FREQ = 5  # steps
-TARGET_UPDATE_FREQ = 500  # steps
-MAX_LOSS_STAT_LEN = 40
-MAX_REWARD_STAT_LEN = 40
-
-# # Parameters for testing
-# ATTEN_SIZE = {0: 2, 1: 2}
-# BATCH_SIZE = 2
-# TIME_STEP = 15
+# ATTEN_SIZE = {0: 15, 1: 15}
+# BATCH_SIZE = 25
+# TIME_STEP = 25
 # LR = 0.00025
 # GAMMA = 0.99
-# INITIAL_EPSILON = 0
-# FINAL_EPSILON = 0
-# EPSILON_CHANGE_RATE = 0.99
-# TOTAL_EPSIODES = 30
-# MAX_STEPS = 30
-# MEMORY_SIZE = 2
-# UPDATE_FREQ = 1
-# PERFORMANCE_DISPLAY_INTERVAL = 2
-# CHECKPOINT_SAVE_INTERVAL = 2
-# TARGET_UPDATE_FREQ = 90  # steps
+# INITIAL_EPSILON = 1.0
+# FINAL_EPSILON = 0.1
+# EPSILON_CHANGE_RATE = 0.999
+# TOTAL_EPSIODES = 2000
+# MAX_STEPS = 200
+# MEMORY_SIZE = 100
+# PERFORMANCE_DISPLAY_INTERVAL = 20  # episodes
+# CHECKPOINT_SAVE_INTERVAL = 25  # episodes
+# UPDATE_FREQ = 5  # steps
+# TARGET_UPDATE_FREQ = 500  # steps
 # MAX_LOSS_STAT_LEN = 40
 # MAX_REWARD_STAT_LEN = 40
+
+# Parameters for testing
+ATTEN_SIZE = {0: 2, 1: 2}
+BATCH_SIZE = 2
+TIME_STEP = 15
+LR = 0.00025
+GAMMA = 0.99
+INITIAL_EPSILON = 0
+FINAL_EPSILON = 0
+EPSILON_CHANGE_RATE = 0.99
+TOTAL_EPSIODES = 30
+MAX_STEPS = 30
+MEMORY_SIZE = 2
+UPDATE_FREQ = 1
+PERFORMANCE_DISPLAY_INTERVAL = 2
+CHECKPOINT_SAVE_INTERVAL = 2
+TARGET_UPDATE_FREQ = 90  # steps
+MAX_LOSS_STAT_LEN = 40
+MAX_REWARD_STAT_LEN = 40
 
 resume = True
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -197,7 +197,8 @@ for episode in tqdm(range(start_episode, start_episode + TOTAL_EPSIODES)):
                     hidden_state_per_action, cell_state_per_action) = main_model[id].module.forward(prev_obs[id][0],
                                                                                                     act=torch.zeros((1,
                                                                                                                      0,
-                                                                                                                     len(ACTION_SHAPE))).to(device),
+                                                                                                                     len(ACTION_SHAPE))).to(
+                                                                                                        device),
                                                                                                     bsize=1,
                                                                                                     hidden_state=
                                                                                                     hidden_state[id],
@@ -215,6 +216,7 @@ for episode in tqdm(range(start_episode, start_episode + TOTAL_EPSIODES)):
                 hidden_state[id] = hidden_state[id].to(device)
                 cell_state[id] = cell_state[id].to(device)
         obs_dict, reward_dict, done_dict, info_dict = env.step(act)
+
         done = done_dict["__all__"]
 
         for id in AGENT_ID:
@@ -280,9 +282,9 @@ for episode in tqdm(range(start_episode, start_episode + TOTAL_EPSIODES)):
                         _, _, Q_next, _, _ = target_model[id].module.forward(visual_obs[batch_idx:batch_idx + 1],
                                                                              act[batch_idx:batch_idx + 1],
                                                                              bsize=1,
-                                                                             hidden_state=hidden_batch[:,
+                                                                             hidden_state=hidden_batch[
                                                                                           batch_idx:batch_idx + 1],
-                                                                             cell_state=cell_batch[:,
+                                                                             cell_state=cell_batch[
                                                                                         batch_idx:batch_idx + 1],
                                                                              lstm_out=out_batch[
                                                                                       batch_idx:batch_idx + 1])

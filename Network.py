@@ -69,11 +69,11 @@ class Network(nn.Module):
                 self.device)
             # Hidden states of LSTM for all possible actions
             # shape: (1 , bsize, action_shape[0], action_shape[1], ..., lstm_hidden_size)
-            hidden_state_per_action = torch.zeros((1, bsize,) + self.action_shape + hidden_state.shape[-1:]).float().to(
+            hidden_state_per_action = torch.zeros((bsize, 1) + self.action_shape + hidden_state.shape[-1:]).float().to(
                 self.device)
             # Cell states of LSTM for all possible actions
             # shape: (1 , bsize, action_shape[0], action_shape[1], ..., lstm_hidden_size)
-            cell_state_per_action = torch.zeros((1, bsize,) + self.action_shape + cell_state.shape[-1:]).float().to(
+            cell_state_per_action = torch.zeros((bsize, 1) + self.action_shape + cell_state.shape[-1:]).float().to(
                 self.device)
             for idx, _ in np.ndenumerate(action_matrix):
                 proposed_acts = torch.tensor(idx).repeat(bsize, 1, 1).float().to(self.device)
