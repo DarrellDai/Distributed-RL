@@ -235,7 +235,7 @@ for episode in tqdm(range(start_episode, start_episode + TOTAL_EPSIODES)):
                 target_model[id].load_state_dict(main_model[id].state_dict())
 
         if (total_steps % UPDATE_FREQ) == 0:
-            print("\n Updating...")
+
             for id in AGENT_ID:
                 hidden_batch, cell_batch, out_batch = main_model[id].module.lstm.init_hidden_states_and_outputs(
                     bsize=BATCH_SIZE)
