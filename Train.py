@@ -194,7 +194,7 @@ for episode in tqdm(range(start_episode, start_episode + TOTAL_EPSIODES)):
                 prev_obs[id][0] = prev_obs[id][0].reshape(1, 1, prev_obs[id][0].shape[0], prev_obs[id][0].shape[1],
                                                           prev_obs[id][0].shape[2])
                 lo, (hs, cs), dqn_out, out_per_action, (
-                    hidden_state_per_action, cell_state_per_action) = main_model[id].module.forward(prev_obs[id][0],
+                    hidden_state_per_action, cell_state_per_action) = main_model[id].module(prev_obs[id][0],
                                                                                                     act=torch.zeros((1,
                                                                                                                      0,
                                                                                                                      len(ACTION_SHAPE))).to(
@@ -278,7 +278,7 @@ for episode in tqdm(range(start_episode, start_episode + TOTAL_EPSIODES)):
                 Q_next_max = torch.zeros(BATCH_SIZE).float().to(device)
                 for batch_idx in range(BATCH_SIZE):
                     if next_vector_obs[batch_idx][0][0] == 1:
-                        _, _, Q_next, _, _ = target_model[id].module.forward(visual_obs[batch_idx:batch_idx + 1],
+                        _, _, Q_next, _, _ = target_model[id].module(visual_obs[batch_idx:batch_idx + 1],
                                                                              act[batch_idx:batch_idx + 1],
                                                                              hidden_state=hidden_batch[
                                                                                           batch_idx:batch_idx + 1],
@@ -289,7 +289,7 @@ for episode in tqdm(range(start_episode, start_episode + TOTAL_EPSIODES)):
                         Q_next_max[batch_idx] = torch.max(Q_next.reshape(-1))
                 target_values = rewards[:, TIME_STEP - 1] + (GAMMA * Q_next_max)
                 target_values = target_values.float()
-                _, _, Q_s, _, _ = main_model[id].module.forward(current_visual_obs, act,
+                _, _, Q_s, _, _ = main_model[id].module(current_visual_obs, act,
                                                                 hidden_state=hidden_batch, cell_state=cell_batch,
                                                                 lstm_out=out_batch)
 
