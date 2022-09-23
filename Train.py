@@ -23,52 +23,52 @@ LSTM_HIDDEN_SIZE = {0: 512, 1: 512}
 ACTION_SHAPE = {0: (3, 3), 1: (3, 3)}
 ACTION_OUT_SIZE = 32
 
-ATTEN_SIZE = {0: 15, 1: 15}
-BATCH_SIZE = 25
-TIME_STEP = 25
-LR = 0.00025
-GAMMA = 0.99
-INITIAL_EPSILON = 1.0
-FINAL_EPSILON = 0.1
-EPSILON_CHANGE_RATE = 0.999
-TOTAL_EPSIODES = 2000
-MAX_STEPS = 200
-MEMORY_SIZE = 100
-PERFORMANCE_DISPLAY_INTERVAL = 20  # episodes
-CHECKPOINT_SAVE_INTERVAL = 25  # episodes
-UPDATE_FREQ = 5  # steps
-TARGET_UPDATE_FREQ = 500  # steps
-MAX_LOSS_STAT_LEN = 40
-MAX_REWARD_STAT_LEN = 40
-
-# # Parameters for testing
-# ATTEN_SIZE = {0: 2, 1: 2}
-# BATCH_SIZE = 6
-# TIME_STEP = 15
+# ATTEN_SIZE = {0: 15, 1: 15}
+# BATCH_SIZE = 25
+# TIME_STEP = 25
 # LR = 0.00025
 # GAMMA = 0.99
-# INITIAL_EPSILON = 0
-# FINAL_EPSILON = 0
-# EPSILON_CHANGE_RATE = 0.99
-# TOTAL_EPSIODES = 30
-# MAX_STEPS = 30
-# MEMORY_SIZE = 10
-# UPDATE_FREQ = 1
-# PERFORMANCE_DISPLAY_INTERVAL = 2
-# CHECKPOINT_SAVE_INTERVAL = 2
-# TARGET_UPDATE_FREQ = 90  # steps
+# INITIAL_EPSILON = 1.0
+# FINAL_EPSILON = 0.1
+# EPSILON_CHANGE_RATE = 0.999
+# TOTAL_EPSIODES = 2000
+# MAX_STEPS = 200
+# MEMORY_SIZE = 100
+# PERFORMANCE_DISPLAY_INTERVAL = 20  # episodes
+# CHECKPOINT_SAVE_INTERVAL = 25  # episodes
+# UPDATE_FREQ = 5  # steps
+# TARGET_UPDATE_FREQ = 500  # steps
 # MAX_LOSS_STAT_LEN = 40
 # MAX_REWARD_STAT_LEN = 40
 
+# Parameters for testing
+ATTEN_SIZE = {0: 2, 1: 2}
+BATCH_SIZE = 6
+TIME_STEP = 15
+LR = 0.00025
+GAMMA = 0.99
+INITIAL_EPSILON = 0
+FINAL_EPSILON = 0
+EPSILON_CHANGE_RATE = 0.99
+TOTAL_EPSIODES = 30
+MAX_STEPS = 30
+MEMORY_SIZE = 10
+UPDATE_FREQ = 1
+PERFORMANCE_DISPLAY_INTERVAL = 2
+CHECKPOINT_SAVE_INTERVAL = 2
+TARGET_UPDATE_FREQ = 90  # steps
+MAX_LOSS_STAT_LEN = 40
+MAX_REWARD_STAT_LEN = 40
+
 resume = True
-device = torch.device('cuda:5' if torch.cuda.is_available() else 'cpu')
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 mem = Memory(memsize=MEMORY_SIZE, agent_ids=AGENT_ID)
 criterion = nn.MSELoss()
 
 writer = SummaryWriter()
 
-env_path = '../Env/Hide and Seek'
-# env_path = 'D:/Unity Projects/Hide and Seek/Env/Hide and Seek'
+# env_path = '../Env/Hide and Seek'
+env_path = 'D:/Unity Projects/Hide and Seek/Env/Hide and Seek'
 unity_env = UnityEnvironment(env_path)
 env = MultiUnityWrapper(unity_env=unity_env, uint8_visual=True, allow_multiple_obs=True)
 
