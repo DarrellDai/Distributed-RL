@@ -25,15 +25,15 @@ ACTION_OUT_SIZE = 32
 
 ATTEN_SIZE = {0: 15, 1: 15}
 BATCH_SIZE = 25
-TIME_STEP = 25
+TIME_STEP = 20
 LR = 0.00025
 GAMMA = 0.99
 INITIAL_EPSILON = 1.0
 FINAL_EPSILON = 0.1
 EPSILON_CHANGE_RATE = 0.999
 TOTAL_EPSIODES = 2000
-MAX_STEPS = 200
-MEMORY_SIZE = 100
+MAX_STEPS = 100
+MEMORY_SIZE = 50
 PERFORMANCE_DISPLAY_INTERVAL = 20  # episodes
 CHECKPOINT_SAVE_INTERVAL = 25  # episodes
 UPDATE_FREQ = 5  # steps
@@ -60,7 +60,7 @@ MAX_REWARD_STAT_LEN = 40
 # MAX_LOSS_STAT_LEN = 40
 # MAX_REWARD_STAT_LEN = 40
 
-resume = True
+resume = False
 device = torch.device('cuda:5' if torch.cuda.is_available() else 'cpu')
 mem = Memory(memsize=MEMORY_SIZE, agent_ids=AGENT_ID)
 criterion = nn.MSELoss()
