@@ -179,7 +179,7 @@ for episode in tqdm(range(start_episode, start_episode + TOTAL_EPSIODES)):
                 prev_obs[id][0] = torch.from_numpy(prev_obs[id][0]).float().to(device)
                 prev_obs[id][0] = prev_obs[id][0].reshape(1, 1, prev_obs[id][0].shape[0], prev_obs[id][0].shape[1],
                                                           prev_obs[id][0].shape[2])
-                model_out = main_model[id].module.forward(prev_obs[id][0], act[id],
+                model_out = main_model[id].module(prev_obs[id][0], act[id],
                                                           hidden_state=hidden_state[id],
                                                           cell_state=cell_state[id], lstm_out=lstm_out[id])
 
