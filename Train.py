@@ -60,12 +60,12 @@ MAX_REWARD_STAT_LEN = 40
 # MAX_LOSS_STAT_LEN = 40
 # MAX_REWARD_STAT_LEN = 40
 
-resume = False
+resume = True
 device = torch.device('cuda:5' if torch.cuda.is_available() else 'cpu')
 mem = Memory(memsize=MEMORY_SIZE, agent_ids=AGENT_ID)
 criterion = nn.MSELoss()
 
-writer = SummaryWriter()
+writer = SummaryWriter("runs/Sep23_17-56-48_bc298-cmp-01")
 
 env_path = '../Env/Hide and Seek'
 # env_path = 'D:/Unity Projects/Hide and Seek/Env/Hide and Seek'
@@ -98,6 +98,7 @@ if resume:
         checkpoint_to_load)
     start_episode = episode_count
     for id in AGENT_ID:
+        print(model_state_dicts)
         main_model[id].load_state_dict(model_state_dicts[id])
         target_model[id].load_state_dict(main_model[id].state_dict())
         optimizer[id].load_state_dict(optimizer_state_dicts[id])
@@ -181,8 +182,8 @@ for episode in tqdm(range(start_episode, start_episode + TOTAL_EPSIODES)):
                     prev_obs[id][0] = prev_obs[id][0].reshape(1, 1, prev_obs[id][0].shape[0], prev_obs[id][0].shape[1],
                                                               prev_obs[id][0].shape[2])
                     model_out = main_model[id](prev_obs[id][0], act[id],
-                                                              hidden_state=hidden_state[id],
-                                                              cell_state=cell_state[id], lstm_out=lstm_out[id])
+                                               hidden_state=hidden_state[id],
+                                               cell_state=cell_state[id], lstm_out=lstm_out[id])
 
                     hidden_state[id] = model_out[1][0]
                     cell_state[id] = model_out[1][1]
@@ -196,16 +197,16 @@ for episode in tqdm(range(start_episode, start_episode + TOTAL_EPSIODES)):
                                                               prev_obs[id][0].shape[2])
                     lo, (hs, cs), dqn_out, out_per_action, (
                         hidden_state_per_action, cell_state_per_action) = main_model[id](prev_obs[id][0],
-                                                                                                        act=torch.zeros((1,
-                                                                                                                         0,
-                                                                                                                         len(ACTION_SHAPE))).to(
-                                                                                                            device),
-                                                                                                        hidden_state=
-                                                                                                        hidden_state[id],
-                                                                                                        cell_state=
-                                                                                                        cell_state[id],
-                                                                                                        lstm_out=lstm_out[
-                                                                                                            id])
+                                                                                         act=torch.zeros((1,
+                                                                                                          0,
+                                                                                                          len(ACTION_SHAPE))).to(
+                                                                                             device),
+                                                                                         hidden_state=
+                                                                                         hidden_state[id],
+                                                                                         cell_state=
+                                                                                         cell_state[id],
+                                                                                         lstm_out=lstm_out[
+                                                                                             id])
 
                     act[id] = torch.from_numpy(find_optimal_action(dqn_out))
                     hidden_state[id], cell_state[id], lo_new = find_hidden_cell_out_of_an_action(act[id],
@@ -280,19 +281,19 @@ for episode in tqdm(range(start_episode, start_episode + TOTAL_EPSIODES)):
                 for batch_idx in range(BATCH_SIZE):
                     if next_vector_obs[batch_idx][0][0] == 1:
                         _, _, Q_next, _, _ = target_model[id](visual_obs[batch_idx:batch_idx + 1],
-                                                                             act[batch_idx:batch_idx + 1],
-                                                                             hidden_state=hidden_batch[
-                                                                                          batch_idx:batch_idx + 1],
-                                                                             cell_state=cell_batch[
-                                                                                        batch_idx:batch_idx + 1],
-                                                                             lstm_out=out_batch[
-                                                                                      batch_idx:batch_idx + 1])
+                                                              act[batch_idx:batch_idx + 1],
+                                                              hidden_state=hidden_batch[
+                                                                           batch_idx:batch_idx + 1],
+                                                              cell_state=cell_batch[
+                                                                         batch_idx:batch_idx + 1],
+                                                              lstm_out=out_batch[
+                                                                       batch_idx:batch_idx + 1])
                         Q_next_max[batch_idx] = torch.max(Q_next.reshape(-1))
                 target_values = rewards[:, TIME_STEP - 1] + (GAMMA * Q_next_max)
                 target_values = target_values.float()
                 _, _, Q_s, _, _ = main_model[id](current_visual_obs, act,
-                                                                hidden_state=hidden_batch, cell_state=cell_batch,
-                                                                lstm_out=out_batch)
+                                                 hidden_state=hidden_batch, cell_state=cell_batch,
+                                                 lstm_out=out_batch)
 
                 Q_s_a = Q_s[:, 0, 0]
                 loss = criterion(Q_s_a, target_values)
@@ -310,6 +311,10 @@ for episode in tqdm(range(start_episode, start_episode + TOTAL_EPSIODES)):
                 optimizer[id].step()
     # save performance measure
     mem.add_episode(local_memory)
+    for id in AGENT_ID:
+        writer.add_scalar(str(id) + ": Loss/train", loss_stat[id][-1], episode_count)
+        writer.add_scalar(str(id) + ": Reward/train", total_reward[id], episode_count)
+    writer.flush()
 
     if epsilon > FINAL_EPSILON:
         epsilon *= EPSILON_CHANGE_RATE
@@ -319,15 +324,13 @@ for episode in tqdm(range(start_episode, start_episode + TOTAL_EPSIODES)):
         for id in AGENT_ID:
             print('\n Agent %d, Reward: %f, Loss: %f \n' % (id, total_reward[id], loss_stat[id][-1]))
 
+
     if (episode + 1) % CHECKPOINT_SAVE_INTERVAL == 0:
         model_state_dicts = {}
         optimizer_state_dicts = {}
         for id in AGENT_ID:
             model_state_dicts[id] = main_model[id].state_dict()
             optimizer_state_dicts[id] = optimizer[id].state_dict()
-            writer.add_scalar(str(id) + ": Loss/train", loss_stat[id][-1], episode_count)
-            writer.add_scalar(str(id) + ": Reward/train", total_reward[id], episode_count)
-        writer.flush()
 
         save_checkpoint({
             'model_state_dicts': model_state_dicts,
