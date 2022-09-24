@@ -3,7 +3,18 @@ import numpy as np
 import pickle
 import torch
 import os
-
+import re
+def find_name_of_agents(agent_id_to_behaviour_name, agent_ids):
+    agent_id_to_name={}
+    hider_idx=0
+    seeker_idx=0
+    for id in agent_ids:
+        if re.split("\?", agent_id_to_behaviour_name[id])[0]=="Hider":
+            agent_id_to_name[id]="Hider "+str(hider_idx)
+            hider_idx+=1
+        elif re.split("\?", agent_id_to_behaviour_name[id])[0]=="Seeker":
+            agent_id_to_name[id]="Seeker "+str(seeker_idx)
+            seeker_idx+=1
 
 # dqn_out(bsize, act_shape[0]...)
 def find_optimal_action(dqn_out):
