@@ -407,13 +407,13 @@ class MultiUnityWrapper():
         # Check for number of agents in scene.
         self._n_agents = 0
         self._env.reset()
-        self._agent_id_to_behaviour_name = {}
+        self.agent_id_to_behaviour_name = {}
         self._agents_dict = {}
         for name in self.behaviour_names:
             decision_steps, _ = self._env.get_steps(name)
             self._agents_dict[name] = []
             for agent_id in decision_steps.agent_id:
-                self._agent_id_to_behaviour_name[agent_id] = name
+                self.agent_id_to_behaviour_name[agent_id] = name
                 self._agents_dict[name].append(agent_id)
                 self._n_agents += 1
             self._previous_decision_step = decision_steps
@@ -533,7 +533,7 @@ class MultiUnityWrapper():
         for agent_id, action in action_dict.items():
             if agent_id in self.done_dict:
                 if not self.done_dict[agent_id]:
-                    behaviour_name = self._agent_id_to_behaviour_name[agent_id]
+                    behaviour_name = self.agent_id_to_behaviour_name[agent_id]
                     spec = self._env.behavior_specs[behaviour_name]
                     if torch.is_tensor(action):
                         action_clone=torch.clone(action).cpu()

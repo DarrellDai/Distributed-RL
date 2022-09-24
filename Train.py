@@ -10,6 +10,7 @@ from mlagents_envs.environment import UnityEnvironment
 from copy import deepcopy
 
 import os
+import re
 from utils import find_optimal_action, convert_to_array, find_hidden_cell_out_of_an_action, combine_out, \
     save_checkpoint, find_latest_checkpoint, \
     load_checkpoint
@@ -60,7 +61,7 @@ MAX_REWARD_STAT_LEN = 40
 # MAX_LOSS_STAT_LEN = 40
 # MAX_REWARD_STAT_LEN = 40
 
-resume = True
+resume = False
 device = torch.device('cuda:5' if torch.cuda.is_available() else 'cpu')
 mem = Memory(memsize=MEMORY_SIZE, agent_ids=AGENT_ID)
 criterion = nn.MSELoss()
@@ -311,9 +312,18 @@ for episode in tqdm(range(start_episode, start_episode + TOTAL_EPSIODES)):
                 optimizer[id].step()
     # save performance measure
     mem.add_episode(local_memory)
+
+    hider_idx=0
+    seeker_idx=0
     for id in AGENT_ID:
-        writer.add_scalar(str(id) + ": Loss/train", loss_stat[id][-1], episode_count)
-        writer.add_scalar(str(id) + ": Reward/train", total_reward[id], episode_count)
+        if re.split("?", env.agent_id_to_behaviour_name[id])[0]=="Hider":
+            name="Hider "+str(hider_idx)
+            hider_idx+=1
+        elif re.split("?", env.agent_id_to_behaviour_name[id])[0]=="Seeker":
+            name="Seeker "+str(seeker_idx)
+            seeker_idx+=1
+        writer.add_scalar(name + ": Loss/train", loss_stat[id][-1], episode_count)
+        writer.add_scalar(name + ": Reward/train", total_reward[id], episode_count)
     writer.flush()
 
     if epsilon > FINAL_EPSILON:
