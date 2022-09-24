@@ -15,7 +15,7 @@ def find_name_of_agents(agent_id_to_behaviour_name, agent_ids):
         elif re.split("\?", agent_id_to_behaviour_name[id])[0]=="Seeker":
             agent_id_to_name[id]="Seeker "+str(seeker_idx)
             seeker_idx+=1
-
+    return agent_id_to_name
 # dqn_out(bsize, act_shape[0]...)
 def find_optimal_action(dqn_out):
     dqn_out_clone = torch.clone(dqn_out)

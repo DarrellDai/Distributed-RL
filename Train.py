@@ -104,7 +104,6 @@ if resume:
         checkpoint_to_load)
     start_episode = episode_count
     for id in AGENT_ID:
-        print(model_state_dicts)
         main_model[id].load_state_dict(model_state_dicts[id])
         target_model[id].load_state_dict(main_model[id].state_dict())
         optimizer[id].load_state_dict(optimizer_state_dicts[id])
