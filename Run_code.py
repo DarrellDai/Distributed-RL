@@ -14,3 +14,6 @@ os.system(
 os.system(
     'python Train.py --env_path "D:/Unity Projects/Hide and Seek/Env/Hide and Seek" \
     --action_shape 3 3 --action_shape 3 3 --resume')
+
+# Run server training
+os.system('python Test.py --env_path "D:/Unity Projects/Hide and Seek/Env/Hide and Seek" --action_shape 3 3 --action_shape 3 3 --total_episode 30')

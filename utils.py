@@ -4,7 +4,49 @@ import pickle
 import torch
 import os
 import re
-
+import argparse
+def input_parameters():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--mode", default="train", type=str, help="Execution mode: train, test")
+    parser.add_argument("--resume", default=True, action=argparse.BooleanOptionalAction,
+                        help="If resume the training or start from scratch")
+    parser.add_argument("--device", default=[0], type=int, nargs='+', help="Device Ids for training")
+    parser.add_argument("--name", default="CNN_LSTM_DQN", type=str, help="Experiment name for Tensorboard saving path")
+    parser.add_argument("--agent_id", default=[0, 1], type=int, nargs='+', help="List of agent IDs")
+    parser.add_argument("--cnn_out_size", default=[500, 500], type=int, nargs='+',
+                        help="CNN output size for each agent")
+    parser.add_argument("--lstm_hidden_size", default=[512, 512], type=int, nargs='+',
+                        help="LSTM hidden size for each agent")
+    parser.add_argument("--atten_size", default=[15, 15], type=int, nargs='+', help="Attention size for each agent")
+    parser.add_argument("--action_shape", type=int, nargs='+', action='append',
+                        help="Action size for each branch. One input per agent")
+    parser.add_argument("--act_out_size", default=[32, 32], type=int, nargs='+',
+                        help="ActNet output size for each agent")
+    parser.add_argument("--env_path", default='../Env/Hide and Seek', type=str, metavar='PATH',
+                        help="Path of the Unity environment")
+    parser.add_argument("--batch_size", default=25, type=int, help="Batch size for training")
+    parser.add_argument("--time_step", default=20, type=int, help="Length of trajectory to extract for replay buffer")
+    parser.add_argument("--learning_rate", "-lr", default=0.00025, type=float, help="Learning rate")
+    parser.add_argument("--gamma", default=0.99, type=float, help="Discount Factor")
+    parser.add_argument("--initial_epsilon", default=1.0, type=float, help="Initial exploration rate")
+    parser.add_argument("--final_epsilon", default=0.1, type=float, help="Final exploration rate")
+    parser.add_argument("--epsilon_vanish_rate", default=0.999, type=float, help="Epsilon Vanish Rate")
+    parser.add_argument("--total_episodes", default=2000, type=int, help="Number of Episodes to play")
+    parser.add_argument("--max_steps", default=100, type=int, help="Maximal number of steps for each episode")
+    parser.add_argument("--memory_size", default=50, type=int, help="Number of episodes in memory (replay buffer)")
+    parser.add_argument("--performance_display_interval", "-pdi", default=20, type=int,
+                        help="Number of episodes before displaying the performance of the model")
+    parser.add_argument("--checkpoint_save_interval", "-csi", default=25, type=int,
+                        help="Number of episodes before saving the checkpoint of the model")
+    parser.add_argument("--update_freq", default=5, type=int, help="Number of steps before updating the main model")
+    parser.add_argument("--target_update_freq", default=500, type=int,
+                        help="Number of steps before updating the target model")
+    parser.add_argument("--max_loss_stat_len", default=40, type=int,
+                        help="Maximal number of loss stat to save in checkpoint")
+    parser.add_argument("--max_reward_stat_len", default=40, type=int,
+                        help="Maximal number of reward stat to save in checkpoint")
+    args = parser.parse_args()
+    return args
 
 def import_parameter_from_args(args):
     AGENT_ID = tuple(args.agent_id)
