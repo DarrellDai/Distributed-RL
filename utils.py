@@ -119,8 +119,8 @@ def find_latest_checkpoint(dirname='Checkpoint'):
     return os.path.join(os.path.dirname(__file__), dirname, checkpoint_to_load)
 
 
-def load_checkpoint(file):
-    checkpoint = torch.load(file)
+def load_checkpoint(file, device):
+    checkpoint = torch.load(file, map_location=device)
 
     return checkpoint['model_state_dicts'], checkpoint['optimizer_state_dicts'], checkpoint['total_steps'], checkpoint[
         'episode_count'], checkpoint['epsilon'], checkpoint['memory'], checkpoint['loss_stat'], checkpoint[

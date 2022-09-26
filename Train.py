@@ -94,10 +94,9 @@ for id in AGENT_ID:
     target_model[id].load_state_dict(main_model[id].state_dict())
     optimizer[id] = torch.optim.Adam(main_model[id].parameters(), lr=LR)
 if args.resume:
-    # checkpoint_to_load = find_latest_checkpoint()
     checkpoint_to_load = os.path.join('Checkpoint', 'Checkpoint.pth.tar')
     model_state_dicts, optimizer_state_dicts, total_steps, episode_count, epsilon, mem, loss_stat, reward_stat = load_checkpoint(
-        checkpoint_to_load)
+        checkpoint_to_load, 'cuda:' + str(args.device[0]))
     start_episode = episode_count
     for id in AGENT_ID:
         main_model[id].load_state_dict(model_state_dicts[id])
@@ -149,7 +148,7 @@ else:
     start_episode = episode_count
 
 # Start Algorithm
-for episode in tqdm(range(start_episode, start_episode + TOTAL_EPSIODES)):
+for episode in tqdm(range(start_episode, TOTAL_EPSIODES)):
     episode_count += 1
     total_reward = {}
     step_count = 0
