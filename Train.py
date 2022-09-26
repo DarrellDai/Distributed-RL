@@ -11,73 +11,71 @@ from copy import deepcopy
 
 import os
 import argparse
-import re
 
-from utils import find_name_of_agents, find_optimal_action, convert_to_array, find_hidden_cell_out_of_an_action, combine_out, \
-    save_checkpoint, find_latest_checkpoint, \
+from utils import import_parameter_from_args, find_name_of_agents, find_optimal_action, convert_to_array, \
+    find_hidden_cell_out_of_an_action, \
+    combine_out, \
+    save_checkpoint, \
     load_checkpoint
 from tqdm import tqdm
 from collections import deque
 
-# parser=argparse.ArgumentParser()
-# parser=
-AGENT_ID = (0, 1)
-CNN_OUT_SIZE = {0: 500, 1: 500}
-LSTM_HIDDEN_SIZE = {0: 512, 1: 512}
+parser = argparse.ArgumentParser()
+parser.add_argument("--mode", default="train", type=str, help="Execution mode: train, test")
+parser.add_argument("--resume", default=True, action=argparse.BooleanOptionalAction,
+                    help="If resume the training or start from scratch")
+parser.add_argument("--device", default=[0], type=int, nargs='+', help="Device Ids for training")
+parser.add_argument("--name", default="CNN_LSTM_DQN", type=str, help="Experiment name for Tensorboard saving path")
+parser.add_argument("--agent_id", default=[0, 1], type=int, nargs='+', help="List of agent IDs")
+parser.add_argument("--cnn_out_size", default=[500, 500], type=int, nargs='+', help="CNN output size for each agent")
+parser.add_argument("--lstm_hidden_size", default=[512, 512], type=int, nargs='+',
+                    help="LSTM hidden size for each agent")
+parser.add_argument("--atten_size", default=[15, 15], type=int, nargs='+', help="Attention size for each agent")
+parser.add_argument("--action_shape", type=int, nargs='+', action='append',
+                    help="Action size for each branch. One input per agent")
+parser.add_argument("--act_out_size", default=[32, 32], type=int, nargs='+', help="ActNet output size for each agent")
+parser.add_argument("--env_path", default='../Env/Hide and Seek', type=str, metavar='PATH',
+                    help="Path of the Unity environment")
+parser.add_argument("--batch_size", default=25, type=int, help="Batch size for training")
+parser.add_argument("--time_step", default=20, type=int, help="Length of trajectory to extract for replay buffer")
+parser.add_argument("--learning_rate", "-lr", default=0.00025, type=float, help="Learning rate")
+parser.add_argument("--gamma", default=0.99, type=float, help="Discount Factor")
+parser.add_argument("--initial_epsilon", default=1.0, type=float, help="Initial exploration rate")
+parser.add_argument("--final_epsilon", default=0.1, type=float, help="Final exploration rate")
+parser.add_argument("--epsilon_vanish_rate", default=0.999, type=float, help="Epsilon Vanish Rate")
+parser.add_argument("--total_episodes", default=2000, type=int, help="Number of Episodes to play")
+parser.add_argument("--max_steps", default=100, type=int, help="Maximal number of steps for each episode")
+parser.add_argument("--memory_size", default=50, type=int, help="Number of episodes in memory (replay buffer)")
+parser.add_argument("--performance_display_interval", "-pdi", default=20, type=int,
+                    help="Number of episodes before displaying the performance of the model")
+parser.add_argument("--checkpoint_save_interval", "-csi", default=25, type=int,
+                    help="Number of episodes before saving the checkpoint of the model")
+parser.add_argument("--update_freq", default=5, type=int, help="Number of steps before updating the main model")
+parser.add_argument("--target_update_freq", default=500, type=int,
+                    help="Number of steps before updating the target model")
+parser.add_argument("--max_loss_stat_len", default=40, type=int,
+                    help="Maximal number of loss stat to save in checkpoint")
+parser.add_argument("--max_reward_stat_len", default=40, type=int,
+                    help="Maximal number of reward stat to save in checkpoint")
+args = parser.parse_args()
 
-ACTION_SHAPE = {0: (3, 3), 1: (3, 3)}
-ACTION_OUT_SIZE = 32
+AGENT_ID, CNN_OUT_SIZE, LSTM_HIDDEN_SIZE, ACTION_SHAPE, \
+ACTION_OUT_SIZE, ATTEN_SIZE, BATCH_SIZE, TIME_STEP, LR, \
+GAMMA, INITIAL_EPSILON, FINAL_EPSILON, EPSILON_VANISH_RATE, \
+TOTAL_EPSIODES, MAX_STEPS, MEMORY_SIZE, PERFORMANCE_DISPLAY_INTERVAL, \
+CHECKPOINT_SAVE_INTERVAL, UPDATE_FREQ, TARGET_UPDATE_FREQ, MAX_LOSS_STAT_LEN, \
+MAX_REWARD_STAT_LEN = import_parameter_from_args(args)
 
-ATTEN_SIZE = {0: 15, 1: 15}
-BATCH_SIZE = 25
-TIME_STEP = 20
-LR = 0.00025
-GAMMA = 0.99
-INITIAL_EPSILON = 1.0
-FINAL_EPSILON = 0.1
-EPSILON_CHANGE_RATE = 0.999
-TOTAL_EPSIODES = 2000
-MAX_STEPS = 100
-MEMORY_SIZE = 50
-PERFORMANCE_DISPLAY_INTERVAL = 20  # episodes
-CHECKPOINT_SAVE_INTERVAL = 25  # episodes
-UPDATE_FREQ = 5  # steps
-TARGET_UPDATE_FREQ = 500  # steps
-MAX_LOSS_STAT_LEN = 40
-MAX_REWARD_STAT_LEN = 40
+device = torch.device('cuda:' + str(args.device[0]) if torch.cuda.is_available() else 'cpu')
 
-# # Parameters for testing
-# ATTEN_SIZE = {0: 2, 1: 2}
-# BATCH_SIZE = 6
-# TIME_STEP = 15
-# LR = 0.00025
-# GAMMA = 0.99
-# INITIAL_EPSILON = 0
-# FINAL_EPSILON = 0
-# EPSILON_CHANGE_RATE = 0.99
-# TOTAL_EPSIODES = 30
-# MAX_STEPS = 30
-# MEMORY_SIZE = 10
-# UPDATE_FREQ = 1
-# PERFORMANCE_DISPLAY_INTERVAL = 2
-# CHECKPOINT_SAVE_INTERVAL = 2
-# TARGET_UPDATE_FREQ = 90  # steps
-# MAX_LOSS_STAT_LEN = 40
-# MAX_REWARD_STAT_LEN = 40
-
-resume = False
-device = torch.device('cuda:5' if torch.cuda.is_available() else 'cpu')
-# device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 mem = Memory(memsize=MEMORY_SIZE, agent_ids=AGENT_ID)
 criterion = nn.MSELoss()
 
-writer = SummaryWriter("runs/CNN_LSTM_DQN")
+writer = SummaryWriter(os.path.join("runs", args.name))
 
-env_path = '../Env/Hide and Seek'
-# env_path = 'D:/Unity Projects/Hide and Seek/Env/Hide and Seek'
-unity_env = UnityEnvironment(env_path)
+unity_env = UnityEnvironment(args.env_path)
 env = MultiUnityWrapper(unity_env=unity_env, uint8_visual=True, allow_multiple_obs=True)
-id_to_name=find_name_of_agents(env.agent_id_to_behaviour_name, AGENT_ID)
+id_to_name = find_name_of_agents(env.agent_id_to_behaviour_name, AGENT_ID)
 main_model = {}
 target_model = {}
 optimizer = {}
@@ -85,19 +83,17 @@ optimizer = {}
 for id in AGENT_ID:
     main_model[id] = Network(cnn_out_size=CNN_OUT_SIZE[id], lstm_hidden_size=LSTM_HIDDEN_SIZE[id],
                              atten_size=ATTEN_SIZE[id], action_space_shape=ACTION_SHAPE[id],
-                             action_out_size=ACTION_OUT_SIZE)
+                             action_out_size=ACTION_OUT_SIZE[id])
     target_model[id] = Network(cnn_out_size=CNN_OUT_SIZE[id], lstm_hidden_size=LSTM_HIDDEN_SIZE[id],
                                atten_size=ATTEN_SIZE[id], action_space_shape=ACTION_SHAPE[id],
-                               action_out_size=ACTION_OUT_SIZE)
-    main_model[id] = nn.DataParallel(main_model[id], device_ids=[5, 6, 7])
-    target_model[id] = nn.DataParallel(target_model[id], device_ids=[5, 6, 7])
-    # main_model[id] = nn.DataParallel(main_model[id], device_ids=[0])
-    # target_model[id] = nn.DataParallel(target_model[id], device_ids=[0])
+                               action_out_size=ACTION_OUT_SIZE[id])
+    main_model[id] = nn.DataParallel(main_model[id], device_ids=args.device)
+    target_model[id] = nn.DataParallel(target_model[id], device_ids=args.device)
     main_model[id] = main_model[id].to(device)
     target_model[id] = target_model[id].to(device)
     target_model[id].load_state_dict(main_model[id].state_dict())
     optimizer[id] = torch.optim.Adam(main_model[id].parameters(), lr=LR)
-if resume:
+if args.resume:
     # checkpoint_to_load = find_latest_checkpoint()
     checkpoint_to_load = os.path.join('Checkpoint', 'Checkpoint.pth.tar')
     model_state_dicts, optimizer_state_dicts, total_steps, episode_count, epsilon, mem, loss_stat, reward_stat = load_checkpoint(
@@ -323,13 +319,12 @@ for episode in tqdm(range(start_episode, start_episode + TOTAL_EPSIODES)):
     writer.flush()
 
     if epsilon > FINAL_EPSILON:
-        epsilon *= EPSILON_CHANGE_RATE
+        epsilon *= EPSILON_VANISH_RATE
 
     if (episode + 1) % PERFORMANCE_DISPLAY_INTERVAL == 0:
         print('\n Episode: [%d | %d] LR: %f, Epsilon : %f \n' % (episode, start_episode + TOTAL_EPSIODES, LR, epsilon))
         for id in AGENT_ID:
             print('\n Agent %d, Reward: %f, Loss: %f \n' % (id, total_reward[id], loss_stat[id][-1]))
-
 
     if (episode + 1) % CHECKPOINT_SAVE_INTERVAL == 0:
         model_state_dicts = {}

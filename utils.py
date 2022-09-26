@@ -4,18 +4,55 @@ import pickle
 import torch
 import os
 import re
+
+
+def import_parameter_from_args(args):
+    AGENT_ID = tuple(args.agent_id)
+    CNN_OUT_SIZE = {}
+    LSTM_HIDDEN_SIZE = {}
+    ACTION_SHAPE = {}
+    ACTION_OUT_SIZE = {}
+    ATTEN_SIZE = {}
+    for idx in range(len(AGENT_ID)):
+        CNN_OUT_SIZE[AGENT_ID[idx]] = args.cnn_out_size[idx]
+        LSTM_HIDDEN_SIZE[AGENT_ID[idx]] = args.lstm_hidden_size[idx]
+        ACTION_SHAPE[AGENT_ID[idx]] = tuple(args.action_shape[idx])
+        ATTEN_SIZE[AGENT_ID[idx]] = args.atten_size[idx]
+        ACTION_OUT_SIZE[AGENT_ID[idx]] = args.act_out_size[idx]
+
+    BATCH_SIZE = args.batch_size
+    TIME_STEP = args.time_step
+    LR = args.learning_rate
+    GAMMA = args.gamma
+    INITIAL_EPSILON = args.initial_epsilon
+    FINAL_EPSILON = args.final_epsilon
+    EPSILON_VANISH_RATE = args.epsilon_vanish_rate
+    TOTAL_EPSIODES = args.total_episodes
+    MAX_STEPS = args.max_steps
+    MEMORY_SIZE = args.memory_size
+    PERFORMANCE_DISPLAY_INTERVAL = args.performance_display_interval
+    CHECKPOINT_SAVE_INTERVAL = args.checkpoint_save_interval
+    UPDATE_FREQ = args.update_freq
+    TARGET_UPDATE_FREQ = args.target_update_freq
+    MAX_LOSS_STAT_LEN = args.max_loss_stat_len
+    MAX_REWARD_STAT_LEN = args.max_reward_stat_len
+    return AGENT_ID, CNN_OUT_SIZE, LSTM_HIDDEN_SIZE, ACTION_SHAPE, ACTION_OUT_SIZE, ATTEN_SIZE, BATCH_SIZE, TIME_STEP, LR, GAMMA, INITIAL_EPSILON, FINAL_EPSILON, EPSILON_VANISH_RATE, TOTAL_EPSIODES, MAX_STEPS, MEMORY_SIZE, PERFORMANCE_DISPLAY_INTERVAL, CHECKPOINT_SAVE_INTERVAL, UPDATE_FREQ, TARGET_UPDATE_FREQ, MAX_LOSS_STAT_LEN, MAX_REWARD_STAT_LEN
+
+
 def find_name_of_agents(agent_id_to_behaviour_name, agent_ids):
-    agent_id_to_name={}
-    hider_idx=0
-    seeker_idx=0
+    agent_id_to_name = {}
+    hider_idx = 0
+    seeker_idx = 0
     for id in agent_ids:
-        if re.split("\?", agent_id_to_behaviour_name[id])[0]=="Hider":
-            agent_id_to_name[id]="Hider "+str(hider_idx)
-            hider_idx+=1
-        elif re.split("\?", agent_id_to_behaviour_name[id])[0]=="Seeker":
-            agent_id_to_name[id]="Seeker "+str(seeker_idx)
-            seeker_idx+=1
+        if re.split("\?", agent_id_to_behaviour_name[id])[0] == "Hider":
+            agent_id_to_name[id] = "Hider " + str(hider_idx)
+            hider_idx += 1
+        elif re.split("\?", agent_id_to_behaviour_name[id])[0] == "Seeker":
+            agent_id_to_name[id] = "Seeker " + str(seeker_idx)
+            seeker_idx += 1
     return agent_id_to_name
+
+
 # dqn_out(bsize, act_shape[0]...)
 def find_optimal_action(dqn_out):
     dqn_out_clone = torch.clone(dqn_out)
