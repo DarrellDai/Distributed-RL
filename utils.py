@@ -10,9 +10,12 @@ def input_parameters():
     parser.add_argument("--mode", default="train", type=str, help="Execution mode: train, test")
     parser.add_argument("--resume", default=True, action=argparse.BooleanOptionalAction,
                         help="If resume the training or start from scratch")
+    parser.add_argument("--checkpoint_to_load", default="Checkpoint.pth.tar", type=str, help="Checkpoint to load")
+    parser.add_argument("--checkpoint_to_save", default="Checkpoint.pth.tar", type=str,
+                        help="Checkpoint to save")
     parser.add_argument("--device", default=[0], type=int, nargs='+', help="Device Ids for training")
     parser.add_argument("--name", default="CNN_LSTM_DQN", type=str, help="Experiment name for Tensorboard saving path")
-    parser.add_argument("--agent_id", default=[0, 1], type=int, nargs='+', help="List of agent IDs")
+    parser.add_argument("--agent_ids", default=[0, 1], type=int, nargs='+', help="List of agent IDs")
     parser.add_argument("--cnn_out_size", default=[500, 500], type=int, nargs='+',
                         help="CNN output size for each agent")
     parser.add_argument("--lstm_hidden_size", default=[512, 512], type=int, nargs='+',
@@ -30,7 +33,7 @@ def input_parameters():
     parser.add_argument("--gamma", default=0.99, type=float, help="Discount Factor")
     parser.add_argument("--initial_epsilon", default=1.0, type=float, help="Initial exploration rate")
     parser.add_argument("--final_epsilon", default=0.1, type=float, help="Final exploration rate")
-    parser.add_argument("--epsilon_vanish_rate", default=0.999, type=float, help="Epsilon Vanish Rate")
+    parser.add_argument("--epsilon_vanish_rate", default=0.9999, type=float, help="Epsilon Vanish Rate")
     parser.add_argument("--total_episodes", default=2000, type=int, help="Number of Episodes to play")
     parser.add_argument("--max_steps", default=100, type=int, help="Maximal number of steps for each episode")
     parser.add_argument("--memory_size", default=50, type=int, help="Number of episodes in memory (replay buffer)")
@@ -41,15 +44,11 @@ def input_parameters():
     parser.add_argument("--update_freq", default=5, type=int, help="Number of steps before updating the main model")
     parser.add_argument("--target_update_freq", default=500, type=int,
                         help="Number of steps before updating the target model")
-    parser.add_argument("--max_loss_stat_len", default=40, type=int,
-                        help="Maximal number of loss stat to save in checkpoint")
-    parser.add_argument("--max_reward_stat_len", default=40, type=int,
-                        help="Maximal number of reward stat to save in checkpoint")
     args = parser.parse_args()
     return args
 
 def import_parameter_from_args(args):
-    AGENT_ID = tuple(args.agent_id)
+    AGENT_ID = tuple(args.agent_ids)
     CNN_OUT_SIZE = {}
     LSTM_HIDDEN_SIZE = {}
     ACTION_SHAPE = {}
@@ -76,10 +75,7 @@ def import_parameter_from_args(args):
     CHECKPOINT_SAVE_INTERVAL = args.checkpoint_save_interval
     UPDATE_FREQ = args.update_freq
     TARGET_UPDATE_FREQ = args.target_update_freq
-    MAX_LOSS_STAT_LEN = args.max_loss_stat_len
-    MAX_REWARD_STAT_LEN = args.max_reward_stat_len
-    return AGENT_ID, CNN_OUT_SIZE, LSTM_HIDDEN_SIZE, ACTION_SHAPE, ACTION_OUT_SIZE, ATTEN_SIZE, BATCH_SIZE, TIME_STEP, LR, GAMMA, INITIAL_EPSILON, FINAL_EPSILON, EPSILON_VANISH_RATE, TOTAL_EPSIODES, MAX_STEPS, MEMORY_SIZE, PERFORMANCE_DISPLAY_INTERVAL, CHECKPOINT_SAVE_INTERVAL, UPDATE_FREQ, TARGET_UPDATE_FREQ, MAX_LOSS_STAT_LEN, MAX_REWARD_STAT_LEN
-
+    return AGENT_ID, CNN_OUT_SIZE, LSTM_HIDDEN_SIZE, ACTION_SHAPE, ACTION_OUT_SIZE, ATTEN_SIZE, BATCH_SIZE, TIME_STEP, LR, GAMMA, INITIAL_EPSILON, FINAL_EPSILON, EPSILON_VANISH_RATE, TOTAL_EPSIODES, MAX_STEPS, MEMORY_SIZE, PERFORMANCE_DISPLAY_INTERVAL, CHECKPOINT_SAVE_INTERVAL, UPDATE_FREQ, TARGET_UPDATE_FREQ
 
 def find_name_of_agents(agent_id_to_behaviour_name, agent_ids):
     agent_id_to_name = {}
@@ -140,10 +136,9 @@ def save_obj(obj, name):
         pickle.dump(obj, f, pickle.HIGHEST_PROTOCOL)
 
 
-def save_checkpoint(state, dirname='Checkpoint'):
+def save_checkpoint(state, filename, dirname='Checkpoint'):
     if not os.path.exists(dirname):
         os.mkdir(dirname)
-    filename = 'Checkpoint.pth.tar'
     # filename='Checkpoint_{}.pth.tar'.format(state['episode_count'])
     filepath = os.path.join(dirname, filename)
     torch.save(state, filepath)
@@ -161,9 +156,9 @@ def find_latest_checkpoint(dirname='Checkpoint'):
     return os.path.join(os.path.dirname(__file__), dirname, checkpoint_to_load)
 
 
-def load_checkpoint(file, device):
-    checkpoint = torch.load(file, map_location=device)
+def load_checkpoint(filename, device, dirname='Checkpoint'):
+    filepath = os.path.join(dirname, filename)
+    checkpoint = torch.load(filepath, map_location=device)
 
     return checkpoint['model_state_dicts'], checkpoint['optimizer_state_dicts'], checkpoint['total_steps'], checkpoint[
-        'episode_count'], checkpoint['epsilon'], checkpoint['memory'], checkpoint['loss_stat'], checkpoint[
-               'reward_stat']
+        'episode_count'], checkpoint['epsilon'], checkpoint['memory']
