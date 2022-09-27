@@ -26,7 +26,7 @@ class Pipeline:
         self.device_idx = device_idx
         self.cnn_out_size = {}
         self.lstm_hidden_size = {}
-        self.action_shape= {}
+        self.action_shape = {}
         self.action_out_size = {}
         self.atten_size = {}
         for idx in range(len(action_shape)):
@@ -36,7 +36,7 @@ class Pipeline:
             self.atten_size[idx] = atten_size[idx]
             self.action_out_size[idx] = action_out_size[idx]
 
-    def initialize_model_and_env(self, env_path, learning_rate):
+    def initialize_model_and_env(self, env_path):
         self.device = torch.device('cuda:' + str(self.device_idx[0]) if torch.cuda.is_available() else 'cpu')
 
         unity_env = UnityEnvironment(env_path)
@@ -44,15 +44,15 @@ class Pipeline:
         self.agent_ids = tuple(self.env.agent_id_to_behaviour_name.keys())
         self.id_to_name = find_name_of_agents(self.env.agent_id_to_behaviour_name, self.agent_ids)
         self.main_model = {}
-        optimizer={}
+
         for id in self.agent_ids:
-            self.main_model[id] = Network(cnn_out_size=self.cnn_out_size[id], lstm_hidden_size=self.lstm_hidden_size[id],
+            self.main_model[id] = Network(cnn_out_size=self.cnn_out_size[id],
+                                          lstm_hidden_size=self.lstm_hidden_size[id],
                                           atten_size=self.atten_size[id], action_space_shape=self.action_shape[id],
                                           action_out_size=self.action_out_size[id])
             self.main_model[id] = nn.DataParallel(self.main_model[id], device_ids=self.device_idx)
-            optimizer[id] = torch.optim.Adam(self.main_model[id].parameters(), lr=learning_rate)
-        return optimizer
-    def initialize_training(self, memory_size, learning_rate, name_tensorboard):
+
+    def initialize_training(self, memory_size, learning_rate):
         mem = Memory(memsize=memory_size, agent_ids=self.agent_ids)
         criterion = nn.MSELoss()
         target_model = {}
@@ -64,8 +64,8 @@ class Pipeline:
             target_model[id] = nn.DataParallel(target_model[id], device_ids=self.device_idx)
             target_model[id].load_state_dict(self.main_model[id].state_dict())
             optimizer[id] = torch.optim.Adam(self.main_model[id].parameters(), lr=learning_rate)
-        writer = SummaryWriter(os.path.join("runs", name_tensorboard))
-        return mem, criterion, optimizer, target_model, writer
+
+        return mem, criterion, optimizer, target_model
 
     def fill_memory_with_random_walk(self, memory, max_step):
         for _ in tqdm(range(memory.memsize)):
@@ -146,7 +146,7 @@ class Pipeline:
         return act, hidden_state, cell_state, lstm_out
 
     def resume_training(self, checkpoint_to_load, optimizer, target_model):
-        model_state_dicts, optimizer_state_dicts, total_steps, episode_count, epsilon, mem= load_checkpoint(
+        model_state_dicts, optimizer_state_dicts, total_steps, episode_count, epsilon, mem = load_checkpoint(
             checkpoint_to_load, self.device)
         start_episode = episode_count
         for id in self.agent_ids:
@@ -159,9 +159,11 @@ class Pipeline:
               epsilon_vanish_rate, max_steps, target_model,
               memory, batch_size, time_step, learning_rate, target_update_freq, update_freq, optimizer, criterion,
               performance_display_interval, checkpoint_save_interval,
-              writer, checkpoint_to_save):
+              checkpoint_to_save, name_tensorboard):
+
+        writer = SummaryWriter(os.path.join("runs", name_tensorboard))
         total_reward = {}
-        loss_stat={}
+        loss_stat = {}
         local_memory = {}
         hidden_state = {}
         cell_state = {}
@@ -174,7 +176,7 @@ class Pipeline:
 
             for id in self.agent_ids:
                 total_reward[id] = 0
-                loss_stat[id]=[]
+                loss_stat[id] = []
                 local_memory[id] = []
                 alive[id] = True
                 hidden_state[id], cell_state[id], lstm_out[id] = self.main_model[
@@ -187,10 +189,13 @@ class Pipeline:
                 total_steps += 1
                 with torch.no_grad():
                     if np.random.rand(1) < epsilon:
-                        act, hidden_state, cell_state, lstm_out= self.find_random_action_while_updating_LSTM(prev_obs, hidden_state, cell_state,
-                                                                    lstm_out)
+                        act, hidden_state, cell_state, lstm_out = self.find_random_action_while_updating_LSTM(prev_obs,
+                                                                                                              hidden_state,
+                                                                                                              cell_state,
+                                                                                                              lstm_out)
                     else:
-                        act, hidden_state, cell_state, lstm_out=self.find_best_action_by_model(prev_obs, hidden_state, cell_state, lstm_out)
+                        act, hidden_state, cell_state, lstm_out = self.find_best_action_by_model(prev_obs, hidden_state,
+                                                                                                 cell_state, lstm_out)
                     obs_dict, reward_dict, done_dict, info_dict = self.env.step(act)
 
                     done = done_dict["__all__"]
@@ -319,3 +324,58 @@ class Pipeline:
 
             # update params
             optimizer[id].step()
+
+    def test(self, max_steps, total_episodes, checkpoint_to_load, name_tensorboard):
+        model_state_dicts, _, _, _, _, _ = load_checkpoint(
+            checkpoint_to_load, self.device)
+        for id in self.agent_ids:
+            self.main_model[id].load_state_dict(model_state_dicts[id])
+        writer = SummaryWriter(os.path.join("runs", name_tensorboard))
+        total_reward = {}
+        hidden_state = {}
+        cell_state = {}
+        lstm_out = {}
+        alive = {}
+        episode_count = 0
+        total_steps = 0
+        for episode in tqdm(range(total_episodes)):
+            episode_count += 1
+            step_count = 0
+            prev_obs = self.env.reset()
+
+            for id in self.agent_ids:
+                total_reward[id] = 0
+                alive[id] = True
+                hidden_state[id], cell_state[id], lstm_out[id] = self.main_model[
+                    id].module.lstm.init_hidden_states_and_outputs(
+                    bsize=1)
+            done = False
+            while step_count < max_steps and not done:
+
+                step_count += 1
+                total_steps += 1
+                with torch.no_grad():
+                    act, hidden_state, cell_state, lstm_out = self.find_best_action_by_model(prev_obs, hidden_state,
+                                                                                             cell_state, lstm_out)
+                    obs_dict, reward_dict, done_dict, info_dict = self.env.step(act)
+
+                    done = done_dict["__all__"]
+
+                    for id in self.agent_ids:
+                        total_reward[id] += reward_dict[id]
+
+                        prev_obs[id][0] = prev_obs[id][0].reshape(prev_obs[id][0].shape[2], prev_obs[id][0].shape[3],
+                                                                  prev_obs[id][0].shape[4])
+                        act[id] = act[id].reshape(-1)
+
+                    prev_obs = deepcopy(obs_dict)
+
+            for id in self.agent_ids:
+                writer.add_scalar(self.id_to_name[id] + ": Reward/train", total_reward[id], episode_count)
+            writer.flush()
+
+            print('\n Episode: [%d | %d] \n' % (episode, total_episodes))
+            for id in self.agent_ids:
+                print('\n Agent %d, Reward: %f\n' % (id, total_reward[id]))
+
+        writer.close()
