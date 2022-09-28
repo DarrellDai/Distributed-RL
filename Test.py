@@ -7,3 +7,4 @@ pipeline = Pipeline(args.cnn_out_size, args.lstm_hidden_size, args.action_shape,
 pipeline.initialize_model_and_env(args.env_path)
 
 pipeline.test(args.max_steps, args.total_episodes, args.checkpoint_to_load, args.name)
+pipeline.env.close()

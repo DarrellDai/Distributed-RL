@@ -23,3 +23,4 @@ pipeline.train(start_episode, episode_count, args.total_episodes, total_steps, a
                optimizer, criterion,
                args.performance_display_interval, args.checkpoint_save_interval,
                args.checkpoint_to_save, args.name)
+pipeline.env.close()
