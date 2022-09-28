@@ -237,7 +237,7 @@ class Pipeline:
             memory.add_episode(local_memory)
 
             for id in self.agent_ids:
-                writer.add_scalar(self.id_to_name[id] + ": Loss/train", loss_stat[id][-1], episode_count)
+                writer.add_scalar(self.id_to_name[id] + ": Loss/train", np.mean(loss_stat[id]), episode_count)
                 writer.add_scalar(self.id_to_name[id] + ": Reward/train", total_reward[id], episode_count)
             writer.flush()
 
