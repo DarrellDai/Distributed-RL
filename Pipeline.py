@@ -51,7 +51,9 @@ class Pipeline:
                                           atten_size=self.atten_size[id], action_space_shape=self.action_shape[id],
                                           action_out_size=self.action_out_size[id])
             if torch.cuda.is_available():
-                self.main_model[id] = nn.DataParallel(self.main_model[id], device_ids=self.device_idx).cuda()
+                self.main_model[id] = nn.DataParallel(self.main_model[id], device_ids=self.device_idx).to(self.device)
+            else:
+                self.main_model[id] = self.main_model[id].to(self.device)
 
     def initialize_training(self, memory_size, learning_rate):
         mem = Memory(memsize=memory_size, agent_ids=self.agent_ids)
@@ -63,7 +65,9 @@ class Pipeline:
                                        atten_size=self.atten_size[id], action_space_shape=self.action_shape[id],
                                        action_out_size=self.action_out_size[id])
             if torch.cuda.is_available():
-                target_model[id] = nn.DataParallel(target_model[id], device_ids=self.device_idx).cuda()
+                target_model[id] = nn.DataParallel(target_model[id], device_ids=self.device_idx).to(self.device)
+            else:
+                target_model[id] = target_model[id].to(self.device)
             target_model[id].load_state_dict(self.main_model[id].state_dict())
             optimizer[id] = torch.optim.Adam(self.main_model[id].parameters(), lr=learning_rate)
 
@@ -85,7 +89,7 @@ class Pipeline:
                 act = {}
                 # {0: agent 0's action, 1: ...]
                 for id in self.agent_ids:
-                    act[id] = self.env.action_space[id].sample()-1
+                    act[id] = self.env.action_space[id].sample() - 1
 
                 obs_dict, reward_dict, done_dict, info_dict = self.env.step(act)
                 step_count += 1
