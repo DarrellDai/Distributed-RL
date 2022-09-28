@@ -31,8 +31,6 @@ class Pipeline:
         self.atten_size = {}
         self.cnn_out_size={}
         self.lstm_hidden_size={}
-        self.action_shape={}
-        self.atten_size={}
         self.action_out_size={}
 
 
@@ -141,7 +139,7 @@ class Pipeline:
                 hidden_state_per_action, cell_state_per_action) = self.main_model[id](prev_obs[id][0],
                                                                                       act=
                                                                                       torch.zeros((1, 0,
-                                                                                                   len(self.action_shape))).to(
+                                                                                                   len(self.action_shape[id]))).to(
                                                                                           self.device),
                                                                                       hidden_state=
                                                                                       hidden_state[id],
