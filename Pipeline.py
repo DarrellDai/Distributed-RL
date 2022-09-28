@@ -83,7 +83,8 @@ class Pipeline:
                 act = {}
                 # {0: agent 0's action, 1: ...]
                 for id in self.agent_ids:
-                    act[id] = self.env.action_space[id].sample()
+                    act[id] = self.env.action_space[id].sample()-1
+
                 obs_dict, reward_dict, done_dict, info_dict = self.env.step(act)
                 step_count += 1
                 done = done_dict["__all__"]

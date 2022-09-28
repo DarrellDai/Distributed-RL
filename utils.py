@@ -101,6 +101,7 @@ def find_optimal_action(dqn_out):
     for batch in range(len(dqn_out_clone)):
         index = np.unravel_index(dqn_out_clone[batch].argmax(), dqn_out_clone[batch].shape)
         act[batch, 0] = np.array(index)
+    act-=1
     return act
 
 
