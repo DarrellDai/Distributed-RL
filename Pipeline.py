@@ -50,7 +50,8 @@ class Pipeline:
                                           lstm_hidden_size=self.lstm_hidden_size[id],
                                           atten_size=self.atten_size[id], action_space_shape=self.action_shape[id],
                                           action_out_size=self.action_out_size[id])
-            self.main_model[id] = nn.DataParallel(self.main_model[id], device_ids=self.device_idx)
+            if torch.cuda.is_available():
+                self.main_model[id] = nn.DataParallel(self.main_model[id], device_ids=self.device_idx).cuda()
 
     def initialize_training(self, memory_size, learning_rate):
         mem = Memory(memsize=memory_size, agent_ids=self.agent_ids)
@@ -61,7 +62,8 @@ class Pipeline:
             target_model[id] = Network(cnn_out_size=self.cnn_out_size[id], lstm_hidden_size=self.lstm_hidden_size[id],
                                        atten_size=self.atten_size[id], action_space_shape=self.action_shape[id],
                                        action_out_size=self.action_out_size[id])
-            target_model[id] = nn.DataParallel(target_model[id], device_ids=self.device_idx)
+            if torch.cuda.is_available():
+                target_model[id] = nn.DataParallel(target_model[id], device_ids=self.device_idx).cuda()
             target_model[id].load_state_dict(self.main_model[id].state_dict())
             optimizer[id] = torch.optim.Adam(self.main_model[id].parameters(), lr=learning_rate)
 
