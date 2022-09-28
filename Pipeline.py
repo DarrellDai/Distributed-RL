@@ -241,7 +241,7 @@ class Pipeline:
                 if len(loss_stat[id])>0:
                     loss[id]=np.mean(loss_stat[id])
                 else:
-                    loss=[id]
+                    loss[id]=0
                 writer.add_scalar(self.id_to_name[id] + ": Loss/train", loss[id], episode_count)
                 writer.add_scalar(self.id_to_name[id] + ": Reward/train", total_reward[id], episode_count)
             writer.flush()
