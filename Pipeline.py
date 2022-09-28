@@ -236,8 +236,13 @@ class Pipeline:
             # save performance measure
             memory.add_episode(local_memory)
 
+            loss={}
             for id in self.agent_ids:
-                writer.add_scalar(self.id_to_name[id] + ": Loss/train", np.mean(loss_stat[id]), episode_count)
+                if len(loss_stat[id])>0:
+                    loss[id]=np.mean(loss_stat[id])
+                else:
+                    loss=[id]
+                writer.add_scalar(self.id_to_name[id] + ": Loss/train", loss[id], episode_count)
                 writer.add_scalar(self.id_to_name[id] + ": Reward/train", total_reward[id], episode_count)
             writer.flush()
 
@@ -248,7 +253,7 @@ class Pipeline:
                 print('\n Episode: [%d | %d] LR: %f, Epsilon : %f \n' % (
                     episode, start_episode + total_episodes, learning_rate, epsilon))
                 for id in self.agent_ids:
-                    print('\n Agent %d, Reward: %f, Loss: %f \n' % (id, total_reward[id], np.mean(loss_stat[id])))
+                    print('\n Agent %d, Reward: %f, Loss: %f \n' % (id, total_reward[id], loss[id]))
 
             if (episode + 1) % checkpoint_save_interval == 0:
                 model_state_dicts = {}
