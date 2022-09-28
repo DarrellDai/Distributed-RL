@@ -22,26 +22,33 @@ from collections import deque
 
 
 class Pipeline:
-    def __init__(self, cnn_out_size, lstm_hidden_size, action_shape, action_out_size, atten_size, device_idx):
-        self.device_idx = device_idx
+    def __init__(self):
+
         self.cnn_out_size = {}
         self.lstm_hidden_size = {}
         self.action_shape = {}
         self.action_out_size = {}
         self.atten_size = {}
-        for idx in range(len(action_shape)):
-            self.cnn_out_size[idx] = cnn_out_size[idx]
-            self.lstm_hidden_size[idx] = lstm_hidden_size[idx]
-            self.action_shape[idx] = tuple(action_shape[idx])
-            self.atten_size[idx] = atten_size[idx]
-            self.action_out_size[idx] = action_out_size[idx]
+        self.cnn_out_size={}
+        self.lstm_hidden_size={}
+        self.action_shape={}
+        self.atten_size={}
+        self.action_out_size={}
 
-    def initialize_model_and_env(self, env_path):
+
+    def initialize_model_and_env(self, cnn_out_size, lstm_hidden_size, action_shape, action_out_size, atten_size, device_idx, env_path):
+        self.device_idx = device_idx
         self.device = torch.device('cuda:' + str(self.device_idx[0]) if torch.cuda.is_available() else 'cpu')
 
         unity_env = UnityEnvironment(env_path)
         self.env = MultiUnityWrapper(unity_env=unity_env, uint8_visual=True, allow_multiple_obs=True)
         self.agent_ids = tuple(self.env.agent_id_to_behaviour_name.keys())
+        for idx in range(len(self.agent_ids)):
+            self.cnn_out_size[self.agent_ids[idx]] = cnn_out_size[idx]
+            self.lstm_hidden_size[self.agent_ids[idx]] = lstm_hidden_size[idx]
+            self.action_shape[self.agent_ids[idx]] = tuple(action_shape[idx])
+            self.atten_size[self.agent_ids[idx]] = atten_size[idx]
+            self.action_out_size[self.agent_ids[idx]]= action_out_size[idx]
         self.id_to_name = find_name_of_agents(self.env.agent_id_to_behaviour_name, self.agent_ids)
         self.main_model = {}
 
@@ -105,7 +112,7 @@ class Pipeline:
                 prev_obs = obs_dict
             memory.add_episode(local_memory)
 
-        print('\n Populated with %d Episodes' % (len(memory.memory[0])))
+        print('\n Populated with %d Episodes' % (len(memory.memory[memory.agent_ids[0]])))
 
     def find_random_action_while_updating_LSTM(self, prev_obs, hidden_state, cell_state, lstm_out):
         act = {}
