@@ -29,12 +29,12 @@ class Pipeline:
         self.action_shape = {}
         self.action_out_size = {}
         self.atten_size = {}
-        self.cnn_out_size={}
-        self.lstm_hidden_size={}
-        self.action_out_size={}
+        self.cnn_out_size = {}
+        self.lstm_hidden_size = {}
+        self.action_out_size = {}
 
-
-    def initialize_model_and_env(self, cnn_out_size, lstm_hidden_size, action_shape, action_out_size, atten_size, device_idx, env_path):
+    def initialize_model_and_env(self, cnn_out_size, lstm_hidden_size, action_shape, action_out_size, atten_size,
+                                 device_idx, env_path):
         self.device_idx = device_idx
         self.device = torch.device('cuda:' + str(self.device_idx[0]) if torch.cuda.is_available() else 'cpu')
 
@@ -46,7 +46,7 @@ class Pipeline:
             self.lstm_hidden_size[self.agent_ids[idx]] = lstm_hidden_size[idx]
             self.action_shape[self.agent_ids[idx]] = tuple(action_shape[idx])
             self.atten_size[self.agent_ids[idx]] = atten_size[idx]
-            self.action_out_size[self.agent_ids[idx]]= action_out_size[idx]
+            self.action_out_size[self.agent_ids[idx]] = action_out_size[idx]
         self.id_to_name = find_name_of_agents(self.env.agent_id_to_behaviour_name, self.agent_ids)
         self.main_model = {}
 
@@ -115,7 +115,7 @@ class Pipeline:
     def find_random_action_while_updating_LSTM(self, prev_obs, hidden_state, cell_state, lstm_out):
         act = {}
         for id in self.agent_ids:
-            act[id] = self.env.action_space[id].sample()
+            act[id] = self.env.action_space[id].sample() - 1
             act[id] = torch.tensor(act[id]).reshape(1, 1, len(act[id])).to(self.device)
             prev_obs[id][0] = torch.from_numpy(prev_obs[id][0]).float().to(self.device)
             prev_obs[id][0] = prev_obs[id][0].reshape(1, 1, prev_obs[id][0].shape[0], prev_obs[id][0].shape[1],
@@ -139,7 +139,9 @@ class Pipeline:
                 hidden_state_per_action, cell_state_per_action) = self.main_model[id](prev_obs[id][0],
                                                                                       act=
                                                                                       torch.zeros((1, 0,
-                                                                                                   len(self.action_shape[id]))).to(
+                                                                                                   len(
+                                                                                                       self.action_shape[
+                                                                                                           id]))).to(
                                                                                           self.device),
                                                                                       hidden_state=
                                                                                       hidden_state[id],
@@ -234,12 +236,12 @@ class Pipeline:
             # save performance measure
             memory.add_episode(local_memory)
 
-            loss={}
+            loss = {}
             for id in self.agent_ids:
-                if len(loss_stat[id])>0:
-                    loss[id]=np.mean(loss_stat[id])
+                if len(loss_stat[id]) > 0:
+                    loss[id] = np.mean(loss_stat[id])
                 else:
-                    loss[id]=0
+                    loss[id] = 0
                 writer.add_scalar(self.id_to_name[id] + ": Loss/train", loss[id], episode_count)
                 writer.add_scalar(self.id_to_name[id] + ": Reward/train", total_reward[id], episode_count)
             writer.flush()
