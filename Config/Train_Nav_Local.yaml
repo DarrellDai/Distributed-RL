@@ -1,0 +1,25 @@
+checkpoint_to_load: "Checkpoint_Nav_1.pth.tar"
+device_idx: [0]
+name_tensorboard: "CNN_LSTM_DQN"
+cnn_out_size: [200]
+atten_size: [2]
+lstm_hidden_size: [200]
+action_shape: [[3,3]]
+action_out_size: [16]
+env_path: 'C:/Unity Projects/Hide and Seek/Env_Nav/Hide and Seek'
+total_episodes: 30
+max_steps: 50
+resume: False
+checkpoint_to_save: "Checkpoint_Nav_1.pth.tar"
+batch_size: 1
+time_step: 15
+learning_rate: 0.00025
+gamma: 0.99
+initial_epsilon: 1.0
+final_epsilon: 0.1
+epsilon_vanish_rate: 0.9999
+memory_size: 2
+performance_display_interval: 2
+checkpoint_save_interval: 2
+update_freq: 5
+target_update_freq(steps): 90

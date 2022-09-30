@@ -1,26 +1,38 @@
 from Pipeline import Pipeline
-from utils import train_input_parameters
+from Experience_Replay import Memory
+import yaml
 
-args = train_input_parameters().parse_args()
+with open("config/Train_Nav_Local.yaml") as file:
+    param = yaml.safe_load(file)
+
 pipeline = Pipeline()
-pipeline.initialize_model_and_env(args.cnn_out_size, args.lstm_hidden_size, args.action_shape, args.act_out_size, args.atten_size,
-                    args.device, args.env_path)
-mem, criterion, optimizer, target_model = pipeline.initialize_training(args.memory_size, args.learning_rate)
+pipeline.initialize_model_and_env(cnn_out_size=param["cnn_out_size"], lstm_hidden_size=param["lstm_hidden_size"],
+                                  action_shape=param["action_shape"],
+                                  action_out_size=param["action_out_size"], atten_size=param["atten_size"],
+                                  device_idx=param["device_idx"], env_path=param["env_path"])
+criterion, optimizer, target_model = pipeline.initialize_training(learning_rate=param["learning_rate"])
+memory = Memory(memsize=param["memory_size"], agent_ids=pipeline.agent_ids)
 
-if args.resume:
-    target_model, optimizer, total_steps, start_episode, episode_count, epsilon, mem = pipeline.resume_training(
-        args.checkpoint_to_load, optimizer, target_model)
+if param["resume"]:
+    target_model, optimizer, total_steps, start_episode, episode_count, epsilon, memory = pipeline.resume_training(
+        checkpoint_to_load=param["checkpoint_to_load"], optimizer=optimizer, target_model=target_model)
 else:
-    epsilon = args.initial_epsilon
+    epsilon = param["initial_epsilon"]
     total_steps = 0
     episode_count = 0
     start_episode = episode_count
-    pipeline.fill_memory_with_random_walk(mem, max_step=args.max_steps)
+    pipeline.fill_memory_with_random_walk(memory, max_steps=param["max_steps"])
 
-pipeline.train(start_episode, episode_count, args.total_episodes, total_steps, args.gamma, epsilon, args.final_epsilon,
-               args.epsilon_vanish_rate, args.max_steps, target_model,
-               mem, args.batch_size, args.time_step, args.learning_rate, args.target_update_freq, args.update_freq,
-               optimizer, criterion,
-               args.performance_display_interval, args.checkpoint_save_interval,
-               args.checkpoint_to_save, args.name)
+pipeline.train(start_episode=start_episode, episode_count=episode_count, total_episodes=param["total_episodes"],
+               total_steps=total_steps,
+               gamma=param["gamma"], epsilon=epsilon, final_epsilon=param["final_epsilon"],
+               epsilon_vanish_rate=param["epsilon_vanish_rate"], max_steps=param["max_steps"],
+               target_model=target_model,
+               memory=memory, batch_size=param["batch_size"], time_step=param["time_step"],
+               learning_rate=param["learning_rate"],
+               target_update_freq=param["target_update_freq(steps)"], update_freq=param["update_freq"], optimizer=optimizer,
+               criterion=criterion,
+               performance_display_interval=param["performance_display_interval"],
+               checkpoint_save_interval=param["checkpoint_save_interval"],
+               checkpoint_to_save=param["checkpoint_to_save"], name_tensorboard=param["name_tensorboard"])
 pipeline.env.close()

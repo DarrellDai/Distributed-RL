@@ -1,0 +1,11 @@
+checkpoint_to_load: "Checkpoint_Nav.pth.tar"
+device_idx: [0]
+name_tensorboard: "CNN_LSTM_DQN_Nav_Test_Hider"
+cnn_out_size: [500]
+atten_size: [15]
+lstm_hidden_size: [512]
+action_shape: [[3,3]]
+action_out_size: [32]
+env_path: 'C:/Unity Projects/Hide and Seek/Env_Nav/Hide and Seek'
+total_episodes: 20
+max_steps: 5000

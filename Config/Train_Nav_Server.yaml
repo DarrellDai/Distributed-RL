@@ -1,0 +1,25 @@
+checkpoint_to_load: "Checkpoint_Nav.pth.tar"
+device_idx: [3,4,5,6,7]
+name_tensorboard: "CNN_LSTM_DQN_Nav_Hider"
+cnn_out_size: [500]
+atten_size: [15]
+lstm_hidden_size: [512]
+action_shape: [[3,3]]
+action_out_size: [32]
+env_path: '../Env_Nav/Hide and Seek'
+total_episodes: 2000
+max_steps: 100
+resume: True
+checkpoint_to_save: "Checkpoint_Nav.pth.tar"
+batch_size: 25
+time_step: 20
+learning_rate: 0.00025
+gamma: 0.99
+initial_epsilon: 1.0
+final_epsilon: 0.1
+epsilon_vanish_rate: 0.9999
+memory_size: 50
+performance_display_interval: 20
+checkpoint_save_interval: 25
+update_freq: 5
+target_update_freq(steps): 500
