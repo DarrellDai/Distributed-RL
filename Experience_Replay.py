@@ -23,10 +23,10 @@ class Memory():
         batches = []
         for _ in range(int(np.ceil(self.memsize / bsize))):
             batches.append([])
-        sampled_idx = random.sample(range(self.memsize), self.memsize)
+        sampled_idx = random.sample(range(len(self.memory[agent_id])), len(self.memory[agent_id]))
         order = 0
         for batch in batches:
-            while len(batch) < bsize and order < self.memsize:
+            while len(batch) < bsize and order < len(self.memory[agent_id]):
                 if len(self.memory[agent_id][sampled_idx[order]]) >= time_step:
                     point = np.random.randint(0, len(self.memory[agent_id][sampled_idx[order]]) + 1 - time_step)
                     batch.append(self.memory[agent_id][sampled_idx[order]][point:point + time_step])

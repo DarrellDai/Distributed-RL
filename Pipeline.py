@@ -4,7 +4,6 @@ import torch
 from torch.utils.tensorboard import SummaryWriter
 
 from Network import Network
-from Experience_Replay import Memory
 from unity_wrappers.envs import MultiUnityWrapper
 from mlagents_envs.environment import UnityEnvironment
 from copy import deepcopy
@@ -33,21 +32,18 @@ class Pipeline:
         self.lstm_hidden_size = {}
         self.action_out_size = {}
 
-    def initialize_model_and_env(self, cnn_out_size, lstm_hidden_size, action_shape, action_out_size, atten_size,
-                                 device_idx, env_path):
+    def initialize_model(self, cnn_out_size, lstm_hidden_size, action_shape, action_out_size, atten_size,
+                         device_idx):
         self.device_idx = device_idx
         self.device = torch.device('cuda:' + str(self.device_idx[0]) if torch.cuda.is_available() else 'cpu')
 
-        unity_env = UnityEnvironment(env_path)
-        self.env = MultiUnityWrapper(unity_env=unity_env, uint8_visual=True, allow_multiple_obs=True)
-        self.agent_ids = tuple(self.env.agent_id_to_behaviour_name.keys())
         for idx in range(len(self.agent_ids)):
             self.cnn_out_size[self.agent_ids[idx]] = cnn_out_size[idx]
             self.lstm_hidden_size[self.agent_ids[idx]] = lstm_hidden_size[idx]
             self.action_shape[self.agent_ids[idx]] = tuple(action_shape[idx])
             self.atten_size[self.agent_ids[idx]] = atten_size[idx]
             self.action_out_size[self.agent_ids[idx]] = action_out_size[idx]
-        self.id_to_name = find_name_of_agents(self.env.agent_id_to_behaviour_name, self.agent_ids)
+
         self.main_model = {}
 
         for id in self.agent_ids:
@@ -60,8 +56,13 @@ class Pipeline:
             else:
                 self.main_model[id] = self.main_model[id].to(self.device)
 
-    def initialize_training(self, memory_size, learning_rate):
-        mem = Memory(memsize=memory_size, agent_ids=self.agent_ids)
+    def initialize_env(self, env_path):
+        unity_env = UnityEnvironment(env_path)
+        self.env = MultiUnityWrapper(unity_env=unity_env, uint8_visual=True, allow_multiple_obs=True)
+        self.agent_ids = tuple(self.env.agent_id_to_behaviour_name.keys())
+        self.id_to_name = find_name_of_agents(self.env.agent_id_to_behaviour_name, self.agent_ids)
+
+    def initialize_training(self, learning_rate):
         criterion = nn.MSELoss()
         target_model = {}
         optimizer = {}
@@ -76,9 +77,9 @@ class Pipeline:
             target_model[id].load_state_dict(self.main_model[id].state_dict())
             optimizer[id] = torch.optim.Adam(self.main_model[id].parameters(), lr=learning_rate)
 
-        return mem, criterion, optimizer, target_model
+        return criterion, optimizer, target_model
 
-    def fill_memory_with_random_walk(self, memory, max_step):
+    def fill_memory_with_random_walk(self, memory, max_steps):
         for _ in tqdm(range(memory.memsize)):
             prev_obs = self.env.reset()
             step_count = 0
@@ -90,7 +91,7 @@ class Pipeline:
                 alive[id] = True
             done = False
 
-            while step_count < max_step and not done:
+            while step_count < max_steps and not done:
                 act = {}
                 # {0: agent 0's action, 1: ...]
                 for id in self.agent_ids:
@@ -272,77 +273,109 @@ class Pipeline:
                 }, filename=checkpoint_to_save)
         writer.close()
 
+    def train_from_human_play(self, batch_size, time_step, gamma, memory, criterion, optimizer, learning_rate,
+                              target_model, name_tensorboard, total_epochs, target_update_freq, checkpoint_save_interval, checkpoint_to_save):
+        writer = SummaryWriter(os.path.join("runs", name_tensorboard))
+        loss_stat = {}
+        for epoch in tqdm(range(total_epochs)):
+            for id in self.agent_ids:
+                loss_stat[id] = []
+            self.learn(batch_size, time_step, gamma, memory, criterion, optimizer, target_model,loss_stat)
+            print('\n Epoch: [%d | %d] LR: %f \n' % (epoch, total_epochs, learning_rate))
+            for id in self.agent_ids:
+                print('\n Agent %d, Loss: %f \n' % (id, np.mean(loss_stat[id])))
+                writer.add_scalar(self.id_to_name[id] + ": Loss/train", np.mean(loss_stat[id]), epoch)
+            writer.flush()
+            if (epoch+1) % target_update_freq ==0:
+                for id in self.agent_ids:
+                    target_model[id].load_state_dict(self.main_model[id].state_dict())
+            if (epoch+1) % checkpoint_save_interval == 0:
+                model_state_dicts = {}
+                optimizer_state_dicts = {}
+                for id in self.agent_ids:
+                    model_state_dicts[id] = self.main_model[id].state_dict()
+                    optimizer_state_dicts[id] = optimizer[id].state_dict()
+
+                save_checkpoint({
+                    'model_state_dicts': model_state_dicts,
+                    'optimizer_state_dicts': optimizer_state_dicts,
+                    'epsilon': 1,
+                    'total_steps': 1,
+                    "episode_count": 1,
+                    "memory": {}
+                }, filename=checkpoint_to_save)
     def learn(self, batch_size, time_step, gamma, memory, criterion, optimizer, target_model, loss_stat):
         for id in self.agent_ids:
             hidden_batch, cell_batch, out_batch = self.main_model[id].module.lstm.init_hidden_states_and_outputs(
                 bsize=batch_size)
-            batch = memory.get_batch(bsize=batch_size, time_step=time_step, agent_id=id)
-            current_visual_obs = []
-            current_vector_obs = []
-            act = []
-            rewards = []
-            next_visual_obs = []
-            next_vector_obs = []
+            batches = memory.get_batch(bsize=batch_size, time_step=time_step, agent_id=id)
+            for batch in batches:
+                current_visual_obs = []
+                current_vector_obs = []
+                act = []
+                rewards = []
+                next_visual_obs = []
+                next_vector_obs = []
 
-            for b in batch:
-                cvis, cves, ac, rw, nvis, nves = [], [], [], [], [], []
-                for element in b:
-                    cvis.append(convert_to_array(element[0][0]))
-                    cves.append(convert_to_array(element[0][1][list(element[0][1].keys())[0]]))
-                    ac.append(convert_to_array(element[1]))
-                    rw.append(convert_to_array(element[2]))
-                    nvis.append(convert_to_array(element[3][0]))
-                    nves.append(convert_to_array(element[3][1][list(element[0][1].keys())[0]]))
-                current_visual_obs.append(cvis)
-                current_vector_obs.append(cves)
-                act.append(ac)
-                rewards.append(rw)
-                next_visual_obs.append(nvis)
-                next_vector_obs.append(nves)
+                for b in batch:
+                    cvis, cves, ac, rw, nvis, nves = [], [], [], [], [], []
+                    for element in b:
+                        cvis.append(convert_to_array(element[0][0]))
+                        cves.append(convert_to_array(element[0][1][list(element[0][1].keys())[0]]))
+                        ac.append(convert_to_array(element[1].int()))
+                        rw.append(convert_to_array(element[2]))
+                        nvis.append(convert_to_array(element[3][0]))
+                        nves.append(convert_to_array(element[3][1][list(element[0][1].keys())[0]]))
+                    current_visual_obs.append(cvis)
+                    current_vector_obs.append(cves)
+                    act.append(ac)
+                    rewards.append(rw)
+                    next_visual_obs.append(nvis)
+                    next_vector_obs.append(nves)
 
-            current_visual_obs = np.array(current_visual_obs)
-            current_vector_obs = np.array(current_vector_obs)
-            act = np.array(act)
-            rewards = np.array(rewards)
-            next_visual_obs = np.array(next_visual_obs)
-            next_vector_obs = np.array(next_vector_obs)
+                current_visual_obs = np.array(current_visual_obs)
+                current_vector_obs = np.array(current_vector_obs)
+                act = np.array(act)
+                rewards = np.array(rewards)
+                next_visual_obs = np.array(next_visual_obs)
+                next_vector_obs = np.array(next_vector_obs)
 
-            current_visual_obs = torch.from_numpy(current_visual_obs).float().to(self.device)
-            act = torch.from_numpy(act).long().to(self.device)
-            rewards = torch.from_numpy(rewards).float().to(self.device)
-            next_visual_obs = torch.from_numpy(next_visual_obs).float().to(self.device)
-            visual_obs = torch.concat((current_visual_obs, next_visual_obs[:, -1:]), 1)
-            Q_next_max = torch.zeros(batch_size).float().to(self.device)
-            for batch_idx in range(batch_size):
-                _, _, Q_next, _, _ = target_model[id](visual_obs[batch_idx:batch_idx + 1],
-                                                      act[batch_idx:batch_idx + 1],
-                                                      hidden_state=hidden_batch[
-                                                                   batch_idx:batch_idx + 1],
-                                                      cell_state=cell_batch[
-                                                                 batch_idx:batch_idx + 1],
-                                                      lstm_out=out_batch[
-                                                               batch_idx:batch_idx + 1])
-                Q_next_max[batch_idx] = torch.max(Q_next.reshape(-1))
-            target_values = rewards[:, time_step - 1] + (gamma * Q_next_max)
-            target_values = target_values.float()
-            _, _, Q_s, _, _ = self.main_model[id](current_visual_obs, act,
-                                                  hidden_state=hidden_batch, cell_state=cell_batch,
-                                                  lstm_out=out_batch)
+                current_visual_obs = torch.from_numpy(current_visual_obs).float().to(self.device)
+                act = torch.from_numpy(act).long().to(self.device)
+                rewards = torch.from_numpy(rewards).float().to(self.device)
+                next_visual_obs = torch.from_numpy(next_visual_obs).float().to(self.device)
+                visual_obs = torch.concat((current_visual_obs, next_visual_obs[:, -1:]), 1)
+                Q_next_max = torch.zeros(batch_size).float().to(self.device)
+                for batch_idx in range(batch_size):
+                    _, _, Q_next, _, _ = target_model[id](visual_obs[batch_idx:batch_idx + 1],
+                                                          act[batch_idx:batch_idx + 1],
+                                                          hidden_state=hidden_batch[
+                                                                       batch_idx:batch_idx + 1],
+                                                          cell_state=cell_batch[
+                                                                     batch_idx:batch_idx + 1],
+                                                          lstm_out=out_batch[
+                                                                   batch_idx:batch_idx + 1])
+                    Q_next_max[batch_idx] = torch.max(Q_next.reshape(-1))
+                target_values = rewards[:, time_step - 1] + (gamma * Q_next_max)
+                target_values = target_values.float()
+                _, _, Q_s, _, _ = self.main_model[id](current_visual_obs, act,
+                                                      hidden_state=hidden_batch, cell_state=cell_batch,
+                                                      lstm_out=out_batch)
 
-            Q_s_a = Q_s[:, 0, 0]
-            loss = criterion(Q_s_a, target_values)
+                Q_s_a = Q_s[:, 0, 0]
+                loss = criterion(Q_s_a, target_values)
 
-            #  save performance measure
-            loss_stat[id].append(loss.item())
+                #  save performance measure
+                loss_stat[id].append(loss.item())
 
-            # make previous grad zero
-            optimizer[id].zero_grad()
+                # make previous grad zero
+                optimizer[id].zero_grad()
 
-            # backward
-            loss.backward()
+                # backward
+                loss.backward()
+                # update params
+                optimizer[id].step()
 
-            # update params
-            optimizer[id].step()
 
     def test(self, max_steps, total_episodes, checkpoint_to_load, name_tensorboard):
         model_state_dicts, _, _, _, _, _ = load_checkpoint(

@@ -6,10 +6,11 @@ with open("config/Train_Nav_Local.yaml") as file:
     param = yaml.safe_load(file)
 
 pipeline = Pipeline()
-pipeline.initialize_model_and_env(cnn_out_size=param["cnn_out_size"], lstm_hidden_size=param["lstm_hidden_size"],
-                                  action_shape=param["action_shape"],
-                                  action_out_size=param["action_out_size"], atten_size=param["atten_size"],
-                                  device_idx=param["device_idx"], env_path=param["env_path"])
+pipeline.initialize_env(env_path=param["env_path"])
+pipeline.initialize_model(cnn_out_size=param["cnn_out_size"], lstm_hidden_size=param["lstm_hidden_size"],
+                          action_shape=param["action_shape"],
+                          action_out_size=param["action_out_size"], atten_size=param["atten_size"],
+                          device_idx=param["device_idx"])
 criterion, optimizer, target_model = pipeline.initialize_training(learning_rate=param["learning_rate"])
 memory = Memory(memsize=param["memory_size"], agent_ids=pipeline.agent_ids)
 
