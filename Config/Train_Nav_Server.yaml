@@ -23,3 +23,4 @@ performance_display_interval: 20
 checkpoint_save_interval: 25
 update_freq: 5
 target_update_freq(steps): 500
+train_from_human_play: True
