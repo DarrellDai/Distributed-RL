@@ -21,17 +21,18 @@ class Memory():
     def get_batch(self, bsize, time_step, agent_id):
         self.check_dimension()
         batches = []
-        for _ in range(int(np.ceil(self.memsize / bsize))):
+        memory_long_enough =[]
+        for episode in self.memory[agent_id]:
+            if len(episode)>=time_step:
+                memory_long_enough.append(episode)
+        for _ in range(int(np.floor(len(memory_long_enough) / bsize))):
             batches.append([])
-        sampled_idx = random.sample(range(len(self.memory[agent_id])), len(self.memory[agent_id]))
+        sampled_idx = random.sample(range(len(memory_long_enough)), len(memory_long_enough))
         order = 0
         for batch in batches:
-            while len(batch) < bsize and order < len(self.memory[agent_id]):
-                if len(self.memory[agent_id][sampled_idx[order]]) >= time_step:
-                    point = np.random.randint(0, len(self.memory[agent_id][sampled_idx[order]]) + 1 - time_step)
-                    batch.append(self.memory[agent_id][sampled_idx[order]][point:point + time_step])
-                else:
-                    batch.append(self.memory[agent_id][sampled_idx[order]])
+            while len(batch) < bsize and order < len(memory_long_enough):
+                point = np.random.randint(0, len(memory_long_enough[sampled_idx[order]]) + 1 - time_step)
+                batch.append(memory_long_enough[sampled_idx[order]][point:point + time_step])
                 order += 1
         return batches
 

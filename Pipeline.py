@@ -87,7 +87,6 @@ class Pipeline:
             alive = {}
             for id in self.agent_ids:
                 local_memory[id] = []
-                prev_obs[id][0] = torch.from_numpy(prev_obs[id][0]).float().to(self.device)
                 alive[id] = True
             done = False
 
@@ -118,7 +117,6 @@ class Pipeline:
         for id in self.agent_ids:
             act[id] = self.env.action_space[id].sample() - 1
             act[id] = torch.tensor(act[id]).reshape(1, 1, len(act[id])).to(self.device)
-            prev_obs[id][0] = torch.from_numpy(prev_obs[id][0]).float().to(self.device)
             prev_obs[id][0] = prev_obs[id][0].reshape(1, 1, prev_obs[id][0].shape[0], prev_obs[id][0].shape[1],
                                                       prev_obs[id][0].shape[2])
             model_out = self.main_model[id](prev_obs[id][0], act[id],
@@ -133,7 +131,6 @@ class Pipeline:
     def find_best_action_by_model(self, prev_obs, hidden_state, cell_state, lstm_out):
         act = {}
         for id in self.agent_ids:
-            prev_obs[id][0] = torch.from_numpy(prev_obs[id][0]).float().to(self.device)
             prev_obs[id][0] = prev_obs[id][0].reshape(1, 1, prev_obs[id][0].shape[0], prev_obs[id][0].shape[1],
                                                       prev_obs[id][0].shape[2])
             lo, _, dqn_out, out_per_action, (
@@ -150,14 +147,15 @@ class Pipeline:
                                                                                       cell_state[id],
                                                                                       lstm_out=lstm_out[id])
 
-            act[id] = torch.from_numpy(find_optimal_action(dqn_out))
+            act[id] = find_optimal_action(dqn_out)
             hidden_state[id], cell_state[id], lo_new = find_hidden_cell_out_of_an_action(act[id],
                                                                                          hidden_state_per_action,
                                                                                          cell_state_per_action,
                                                                                          out_per_action)
-            lstm_out[id] = combine_out(lo, lo_new.to(self.device), self.atten_size[id])
-            hidden_state[id] = hidden_state[id].to(self.device)
-            cell_state[id] = cell_state[id].to(self.device)
+            lstm_out[id] = combine_out(lo, lo_new, self.atten_size[id])
+            hidden_state[id] = hidden_state[id]
+            cell_state[id] = cell_state[id]
+            act[id]=torch.from_numpy(act[id]).to(self.device)
         return act, hidden_state, cell_state, lstm_out
 
     def resume_training(self, checkpoint_to_load, optimizer, target_model):
@@ -189,6 +187,7 @@ class Pipeline:
             step_count = 0
             prev_obs = self.env.reset()
 
+
             for id in self.agent_ids:
                 total_reward[id] = 0
                 loss_stat[id] = []
@@ -199,7 +198,8 @@ class Pipeline:
                     bsize=1)
             done = False
             while step_count < max_steps and not done:
-
+                for id in self.agent_ids:
+                    prev_obs[id][0] = torch.from_numpy(prev_obs[id][0]).float().to(self.device)
                 step_count += 1
                 total_steps += 1
                 with torch.no_grad():
@@ -220,7 +220,9 @@ class Pipeline:
 
                         prev_obs[id][0] = prev_obs[id][0].reshape(prev_obs[id][0].shape[2], prev_obs[id][0].shape[3],
                                                                   prev_obs[id][0].shape[4])
+                        prev_obs[id][0] = np.array(prev_obs[id][0].cpu())
                         act[id] = act[id].reshape(-1)
+                        act[id]=np.array(act[id].cpu())
 
                         local_memory[id].append(
                             (deepcopy(prev_obs[id]), deepcopy(act[id]), deepcopy(reward_dict[id]),
@@ -320,12 +322,12 @@ class Pipeline:
                 for b in batch:
                     cvis, cves, ac, rw, nvis, nves = [], [], [], [], [], []
                     for element in b:
-                        cvis.append(convert_to_array(element[0][0]))
-                        cves.append(convert_to_array(element[0][1][list(element[0][1].keys())[0]]))
-                        ac.append(convert_to_array(element[1].int()))
-                        rw.append(convert_to_array(element[2]))
-                        nvis.append(convert_to_array(element[3][0]))
-                        nves.append(convert_to_array(element[3][1][list(element[0][1].keys())[0]]))
+                        cvis.append(element[0][0])
+                        cves.append(element[0][1][list(element[0][1].keys())[0]])
+                        ac.append(element[1])
+                        rw.append(element[2])
+                        nvis.append(element[3][0])
+                        nves.append(element[3][1][list(element[0][1].keys())[0]])
                     current_visual_obs.append(cvis)
                     current_vector_obs.append(cves)
                     act.append(ac)
