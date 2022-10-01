@@ -36,4 +36,3 @@ pipeline.train_from_human_play(batch_size=param["batch_size"], time_step=param["
                            name_tensorboard=param["name_tensorboard"], total_epochs=param["total_epochs"],
                            target_update_freq=param["target_update_freq(epochs)"], checkpoint_save_interval=param["checkpoint_save_interval"],
                            checkpoint_to_save=param["checkpoint_to_save"])
-pipeline.env.close()
