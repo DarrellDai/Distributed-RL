@@ -7,7 +7,7 @@ lstm_hidden_size: [200]
 action_shape: [[3,3]]
 action_out_size: [16]
 env_path: 'C:/Unity Projects/Hide and Seek/Env_Nav/Hide and Seek'
-total_episodes: 30
+total_episodes: 100
 max_steps: 50
 resume: True
 checkpoint_to_save: "Checkpoint_Nav_1.pth.tar"
@@ -23,3 +23,4 @@ performance_display_interval: 2
 checkpoint_save_interval: 2
 update_freq: 5
 target_update_freq(steps): 90
+train_from_human_play: False

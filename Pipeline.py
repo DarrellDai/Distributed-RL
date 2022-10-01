@@ -148,14 +148,14 @@ class Pipeline:
                                                                                       lstm_out=lstm_out[id])
 
             act[id] = find_optimal_action(dqn_out)
+            act[id] = torch.from_numpy(act[id]).to(self.device)
             hidden_state[id], cell_state[id], lo_new = find_hidden_cell_out_of_an_action(act[id],
                                                                                          hidden_state_per_action,
                                                                                          cell_state_per_action,
                                                                                          out_per_action)
-            lstm_out[id] = combine_out(lo, lo_new, self.atten_size[id])
+            lstm_out[id] = combine_out(lo, lo_new.to(self.device), self.atten_size[id])
             hidden_state[id] = hidden_state[id]
             cell_state[id] = cell_state[id]
-            act[id]=torch.from_numpy(act[id]).to(self.device)
         return act, hidden_state, cell_state, lstm_out
 
     def resume_training(self, checkpoint_to_load, optimizer, target_model):

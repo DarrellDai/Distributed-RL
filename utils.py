@@ -109,12 +109,11 @@ def find_hidden_cell_out_of_an_action(act, hidden_state_per_action, cell_state_p
     out = torch.zeros(out_per_action.shape[:2] + out_per_action.shape[-1:])
     hidden_state = torch.zeros(hidden_state_per_action.shape[:2] + hidden_state_per_action.shape[-1:])
     cell_state = torch.zeros(cell_state_per_action.shape[:2] + cell_state_per_action.shape[-1:])
-    act_clone = torch.clone(act)
-    act_clone = act_clone.long()
+    act = act.long().cpu()
     for batch in range(len(act)):
-        out[batch, 0] = out_per_action[batch, 0][tuple(np.array(act_clone[batch, 0]))]
-        hidden_state[0, batch] = hidden_state_per_action[batch, 0][tuple(np.array(act_clone[batch, 0]))]
-        cell_state[0, batch] = cell_state_per_action[batch, 0][tuple(np.array(act_clone[batch, 0]))]
+        out[batch, 0] = out_per_action[batch, 0][tuple(np.array(act[batch, 0]))]
+        hidden_state[0, batch] = hidden_state_per_action[batch, 0][tuple(np.array(act[batch, 0]))]
+        cell_state[0, batch] = cell_state_per_action[batch, 0][tuple(np.array(act[batch, 0]))]
     return hidden_state, cell_state, out
 
 

@@ -9,7 +9,7 @@ action_out_size: [32]
 env_path: '../Env_Nav/Hide and Seek'
 total_episodes: 2000
 max_steps: 100
-resume: True
+resume: False
 checkpoint_to_save: "Checkpoint_Nav_Human_Play_RL.pth.tar"
 batch_size: 25
 time_step: 20
