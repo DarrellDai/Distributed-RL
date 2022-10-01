@@ -5,7 +5,7 @@ import torch
 import numpy as np
 from utils import load_checkpoint, save_checkpoint
 
-with open("Config/Train_Nav_Human_Play_Local.yaml") as file:
+with open("Config/Train_Nav_Human_Play_Server.yaml") as file:
     param = yaml.safe_load(file)
 
 pipeline = Pipeline()
