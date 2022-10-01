@@ -2,7 +2,7 @@ from Pipeline import Pipeline
 from Experience_Replay import Memory
 import yaml
 
-with open("config/Train_Nav_Server.yaml") as file:
+with open("Config/Train_Nav_Server.yaml") as file:
     param = yaml.safe_load(file)
 
 pipeline = Pipeline()
