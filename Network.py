@@ -63,7 +63,7 @@ class Network(nn.Module):
         elif len(obs.shape) == 4:
             obs = obs.reshape(bsize * obs.shape[1], 1, obs.shape[2], obs.shape[3])
         else:
-            raise RuntimeError
+            raise RuntimeError("The observation shape must be (bsize, time_step, width, height, (channel)")
         resnet_out = self.resnet(obs)
         resnet_out = resnet_out.view(bsize, int(obs.shape[0] / bsize), -1)
         act_out = self.actnet(act)
