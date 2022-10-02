@@ -25,7 +25,7 @@ class Memory():
         for episode in self.memory[agent_id]:
             if len(episode)>=time_step:
                 memory_long_enough.append(episode)
-        for _ in range(int(np.floor(len(memory_long_enough) / bsize))):
+        for _ in range(int(np.ceil(len(memory_long_enough) / bsize))):
             batches.append([])
         sampled_idx = random.sample(range(len(memory_long_enough)), len(memory_long_enough))
         order = 0

@@ -308,10 +308,10 @@ class Pipeline:
                 }, filename=checkpoint_to_save)
     def learn(self, batch_size, time_step, gamma, memory, criterion, optimizer, target_model, loss_stat):
         for id in self.agent_ids:
-            hidden_batch, cell_batch, out_batch = self.main_model[id].module.lstm.init_hidden_states_and_outputs(
-                bsize=batch_size)
             batches = memory.get_batch(bsize=batch_size, time_step=time_step, agent_id=id)
             for batch in batches:
+                hidden_batch, cell_batch, out_batch = self.main_model[id].module.lstm.init_hidden_states_and_outputs(
+                    bsize=len(batch))
                 current_visual_obs = []
                 current_vector_obs = []
                 act = []
@@ -347,8 +347,8 @@ class Pipeline:
                 rewards = torch.from_numpy(rewards).float().to(self.device)
                 next_visual_obs = torch.from_numpy(next_visual_obs).float().to(self.device)
                 visual_obs = torch.concat((current_visual_obs, next_visual_obs[:, -1:]), 1)
-                Q_next_max = torch.zeros(batch_size).float().to(self.device)
-                for batch_idx in range(batch_size):
+                Q_next_max = torch.zeros(len(batch)).float().to(self.device)
+                for batch_idx in range(len(batch)):
                     _, _, Q_next, _, _ = target_model[id](visual_obs[batch_idx:batch_idx + 1],
                                                           act[batch_idx:batch_idx + 1],
                                                           hidden_state=hidden_batch[
@@ -405,12 +405,14 @@ class Pipeline:
                     bsize=1)
             done = False
             while step_count < max_steps and not done:
-
+                for id in self.agent_ids:
+                    prev_obs[id][0] = torch.from_numpy(prev_obs[id][0]).float().to(self.device)
                 step_count += 1
                 total_steps += 1
                 with torch.no_grad():
+
                     act, hidden_state, cell_state, lstm_out = self.find_best_action_by_model(prev_obs, hidden_state,
-                                                                                             cell_state, lstm_out)
+                                                                                                 cell_state, lstm_out)
                     obs_dict, reward_dict, done_dict, info_dict = self.env.step(act)
 
                     done = done_dict["__all__"]
@@ -420,7 +422,9 @@ class Pipeline:
 
                         prev_obs[id][0] = prev_obs[id][0].reshape(prev_obs[id][0].shape[2], prev_obs[id][0].shape[3],
                                                                   prev_obs[id][0].shape[4])
+                        prev_obs[id][0] = np.array(prev_obs[id][0].cpu())
                         act[id] = act[id].reshape(-1)
+                        act[id] = np.array(act[id].cpu())
 
                     prev_obs = deepcopy(obs_dict)
 
