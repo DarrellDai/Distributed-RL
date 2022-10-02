@@ -112,8 +112,8 @@ def find_hidden_cell_out_of_an_action(act, hidden_state_per_action, cell_state_p
     act = act.long().cpu()
     for batch in range(len(act)):
         out[batch, 0] = out_per_action[batch, 0][tuple(np.array(act[batch, 0]))]
-        hidden_state[0, batch] = hidden_state_per_action[batch, 0][tuple(np.array(act[batch, 0]))]
-        cell_state[0, batch] = cell_state_per_action[batch, 0][tuple(np.array(act[batch, 0]))]
+        hidden_state[batch, 0] = hidden_state_per_action[batch, 0][tuple(np.array(act[batch, 0]))]
+        cell_state[batch, 0] = cell_state_per_action[batch, 0][tuple(np.array(act[batch, 0]))]
     return hidden_state, cell_state, out
 
 
