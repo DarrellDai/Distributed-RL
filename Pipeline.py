@@ -182,11 +182,11 @@ class Pipeline:
         cell_state = {}
         lstm_out = {}
         alive = {}
+        success_num = 0
         for episode in tqdm(range(start_episode, total_episodes)):
             episode_count += 1
             step_count = 0
             prev_obs = self.env.reset()
-
 
             for id in self.agent_ids:
                 total_reward[id] = 0
@@ -222,7 +222,7 @@ class Pipeline:
                                                                   prev_obs[id][0].shape[4])
                         prev_obs[id][0] = np.array(prev_obs[id][0].cpu())
                         act[id] = act[id].reshape(-1)
-                        act[id]=np.array(act[id].cpu())
+                        act[id] = np.array(act[id].cpu())
 
                         local_memory[id].append(
                             (deepcopy(prev_obs[id]), deepcopy(act[id]), deepcopy(reward_dict[id]),
@@ -238,7 +238,8 @@ class Pipeline:
                     self.learn(batch_size, time_step, gamma, memory, criterion, optimizer, target_model, loss_stat)
             # save performance measure
             memory.add_episode(local_memory)
-
+            if not done:
+                success_num += 1
             loss = {}
             for id in self.agent_ids:
                 if len(loss_stat[id]) > 0:
@@ -247,6 +248,8 @@ class Pipeline:
                     loss[id] = 0
                 writer.add_scalar(self.id_to_name[id] + ": Loss/train", loss[id], episode_count)
                 writer.add_scalar(self.id_to_name[id] + ": Reward/train", total_reward[id], episode_count)
+                writer.add_scalar(self.id_to_name[id] + ": Success Rate/train", success_num / (episode + 1),
+                                  episode_count)
             writer.flush()
 
             if epsilon > final_epsilon:
@@ -276,22 +279,23 @@ class Pipeline:
         writer.close()
 
     def train_from_human_play(self, batch_size, time_step, gamma, memory, criterion, optimizer, learning_rate,
-                              target_model, name_tensorboard, total_epochs, target_update_freq, checkpoint_save_interval, checkpoint_to_save):
+                              target_model, name_tensorboard, total_epochs, target_update_freq,
+                              checkpoint_save_interval, checkpoint_to_save):
         writer = SummaryWriter(os.path.join("runs", name_tensorboard))
         loss_stat = {}
         for epoch in tqdm(range(total_epochs)):
             for id in self.agent_ids:
                 loss_stat[id] = []
-            self.learn(batch_size, time_step, gamma, memory, criterion, optimizer, target_model,loss_stat)
+            self.learn(batch_size, time_step, gamma, memory, criterion, optimizer, target_model, loss_stat)
             print('\n Epoch: [%d | %d] LR: %f \n' % (epoch, total_epochs, learning_rate))
             for id in self.agent_ids:
                 print('\n Agent %d, Loss: %f \n' % (id, np.mean(loss_stat[id])))
                 writer.add_scalar(self.id_to_name[id] + ": Loss/train", np.mean(loss_stat[id]), epoch)
             writer.flush()
-            if (epoch+1) % target_update_freq ==0:
+            if (epoch + 1) % target_update_freq == 0:
                 for id in self.agent_ids:
                     target_model[id].load_state_dict(self.main_model[id].state_dict())
-            if (epoch+1) % checkpoint_save_interval == 0:
+            if (epoch + 1) % checkpoint_save_interval == 0:
                 model_state_dicts = {}
                 optimizer_state_dicts = {}
                 for id in self.agent_ids:
@@ -306,6 +310,7 @@ class Pipeline:
                     "episode_count": 1,
                     "memory": {}
                 }, filename=checkpoint_to_save)
+
     def learn(self, batch_size, time_step, gamma, memory, criterion, optimizer, target_model, loss_stat):
         for id in self.agent_ids:
             batches = memory.get_batch(bsize=batch_size, time_step=time_step, agent_id=id)
@@ -378,7 +383,6 @@ class Pipeline:
                 # update params
                 optimizer[id].step()
 
-
     def test(self, max_steps, total_episodes, checkpoint_to_load, name_tensorboard):
         model_state_dicts, _, _, _, _, _ = load_checkpoint(
             checkpoint_to_load, self.device)
@@ -412,7 +416,7 @@ class Pipeline:
                 with torch.no_grad():
 
                     act, hidden_state, cell_state, lstm_out = self.find_best_action_by_model(prev_obs, hidden_state,
-                                                                                                 cell_state, lstm_out)
+                                                                                             cell_state, lstm_out)
                     obs_dict, reward_dict, done_dict, info_dict = self.env.step(act)
 
                     done = done_dict["__all__"]
