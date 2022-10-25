@@ -225,7 +225,7 @@ if __name__ == "__main__":
     parser.add_argument('-n', '--num_actors', type=int, default=1, help='Actor number.')
     parser.add_argument('-i', '--actor_index', type=int, default=0, help="Index of actor")
     parser.add_argument('-r', '--redisserver', type=str, default='localhost', help="Redis's server name.")
-    parser.add_argument('-d', '--device', type=int, nargs='+', default=0, help="Index of GPU to use")
+    parser.add_argument('-d', '--device', type=int, default=0, help="Index of GPU to use")
     args = parser.parse_args()
 
     with open("Config/Train.yaml") as file:
