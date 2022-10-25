@@ -23,7 +23,7 @@ class Learner:
         self.device_idx = device_idx
         self._connect = redis.Redis(host=hostname)
         self._connect.delete("params")
-        self._memory = Distributed_Memory(memsize, self.agent_ids, connect=redis.Redis(host="localhost"))
+        self._memory = Distributed_Memory(memsize, self.agent_ids, connect=redis.Redis(host=hostname))
         self._memory.start()
         self.device = torch.device('cuda:' + str(device_idx[0]) if torch.cuda.is_available() else 'cpu')
 
@@ -191,7 +191,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     with open("Config/Train.yaml") as file:
         param = yaml.safe_load(file)
-    learner = Learner(id_to_name=param["id_to_name"], memsize=30, hostname="localhost", device_idx=param["device_idx"])
+    learner = Learner(id_to_name=param["id_to_name"], memsize=30, hostname=args.redisserver, device_idx=param["device_idx"])
     learner.initialize_model(cnn_out_size=param["cnn_out_size"], lstm_hidden_size=param["lstm_hidden_size"],
                              action_shape=param["action_shape"],
                              action_out_size=param["action_out_size"], atten_size=param["atten_size"])

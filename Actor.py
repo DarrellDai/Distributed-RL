@@ -234,7 +234,7 @@ if __name__ == "__main__":
         id_to_name=param["id_to_name"],
         actor_idx=args.actor_index,
         num_actor=args.num_actors,
-        device_idx=args.device)
+        device_idx=args.device, hostname=args.redisserver)
     actor.initialize_env(param["env_path"])
     actor.initialize_model(cnn_out_size=param["cnn_out_size"], lstm_hidden_size=param["lstm_hidden_size"],
                            action_shape=param["action_shape"],
