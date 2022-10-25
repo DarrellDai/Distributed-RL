@@ -1,83 +1,38 @@
-import torch
+from Network import Network
 import numpy as np
 import pickle
 import torch
 import os
 import re
-import argparse
+from unity_wrappers.envs import MultiUnityWrapper
+from mlagents_envs.environment import UnityEnvironment
+import torch.nn as nn
 
-def train_input_parameters():
-    parser=base_input_parameters()
-    parser.add_argument("--resume", default=True, action=argparse.BooleanOptionalAction,
-                        help="If resume the training or start from scratch")
-    parser.add_argument("--checkpoint_to_save", default="Checkpoint.pth.tar", type=str,
-                        help="Checkpoint to save")
-    parser.add_argument("--batch_size", default=25, type=int, help="Batch size for training")
-    parser.add_argument("--time_step", default=20, type=int, help="Length of trajectory to extract for replay buffer")
-    parser.add_argument("--learning_rate", "-lr", default=0.00025, type=float, help="Learning rate")
-    parser.add_argument("--gamma", default=0.99, type=float, help="Discount Factor")
-    parser.add_argument("--initial_epsilon", default=1.0, type=float, help="Initial exploration rate")
-    parser.add_argument("--final_epsilon", default=0.1, type=float, help="Final exploration rate")
-    parser.add_argument("--epsilon_vanish_rate", default=0.9999, type=float, help="Epsilon Vanish Rate")
-    parser.add_argument("--memory_size", default=50, type=int, help="Number of episodes in memory (replay buffer)")
-    parser.add_argument("--performance_display_interval", "-pdi", default=20, type=int,
-                        help="Number of episodes before displaying the performance of the model")
-    parser.add_argument("--checkpoint_save_interval", "-csi", default=25, type=int,
-                        help="Number of episodes before saving the checkpoint of the model")
-    parser.add_argument("--update_freq", default=5, type=int, help="Number of steps before updating the main model")
-    parser.add_argument("--target_update_freq", default=500, type=int,
-                        help="Number of steps before updating the target model")
-    return parser
-def base_input_parameters():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--checkpoint_to_load", default="Checkpoint.pth.tar", type=str, help="Checkpoint to load")
-    parser.add_argument("--device", default=[0], type=int, nargs='+', help="Device Ids for training")
-    parser.add_argument("--name", default="CNN_LSTM_DQN", type=str, help="Experiment name for Tensorboard saving path")
-    parser.add_argument("--cnn_out_size", default=[500, 500], type=int, nargs='+',
-                        help="CNN output size for each agent")
-    parser.add_argument("--lstm_hidden_size", default=[512, 512], type=int, nargs='+',
-                        help="LSTM hidden size for each agent")
-    parser.add_argument("--atten_size", default=[15, 15], type=int, nargs='+', help="Attention size for each agent")
-    parser.add_argument("--action_shape", type=int, nargs='+', action='append',
-                        help="Action size for each branch. One input per agent")
-    parser.add_argument("--act_out_size", default=[32, 32], type=int, nargs='+',
-                        help="ActNet output size for each agent")
-    parser.add_argument("--env_path", default='../Env/Hide and Seek', type=str, metavar='PATH',
-                        help="Path of the Unity environment")
-    parser.add_argument("--total_episodes", default=2000, type=int, help="Number of Episodes to play")
-    parser.add_argument("--max_steps", default=100, type=int, help="Maximal number of steps for each episode")
 
-    return parser
 
-def import_parameter_from_args(args):
-    AGENT_ID = tuple(args.agent_ids)
-    CNN_OUT_SIZE = {}
-    LSTM_HIDDEN_SIZE = {}
-    ACTION_SHAPE = {}
-    ACTION_OUT_SIZE = {}
-    ATTEN_SIZE = {}
-    for idx in range(len(AGENT_ID)):
-        CNN_OUT_SIZE[AGENT_ID[idx]] = args.cnn_out_size[idx]
-        LSTM_HIDDEN_SIZE[AGENT_ID[idx]] = args.lstm_hidden_size[idx]
-        ACTION_SHAPE[AGENT_ID[idx]] = tuple(args.action_shape[idx])
-        ATTEN_SIZE[AGENT_ID[idx]] = args.atten_size[idx]
-        ACTION_OUT_SIZE[AGENT_ID[idx]] = args.act_out_size[idx]
+def initialize_model(agent_ids, cnn_out_size, lstm_hidden_size, action_shape, action_out_size, atten_size):
+    main_model = {}
+    for idx in range(len(agent_ids)):
+        main_model[agent_ids[idx]] = Network(cnn_out_size=cnn_out_size[idx],
+                                             lstm_hidden_size=lstm_hidden_size[idx],
+                                             atten_size=atten_size[idx], action_space_shape=tuple(action_shape[idx]),
+                                             action_out_size=action_out_size[idx])
+    return main_model
 
-    BATCH_SIZE = args.batch_size
-    TIME_STEP = args.time_step
-    LR = args.learning_rate
-    GAMMA = args.gamma
-    INITIAL_EPSILON = args.initial_epsilon
-    FINAL_EPSILON = args.final_epsilon
-    EPSILON_VANISH_RATE = args.epsilon_vanish_rate
-    TOTAL_EPSIODES = args.total_episodes
-    MAX_STEPS = args.max_steps
-    MEMORY_SIZE = args.memory_size
-    PERFORMANCE_DISPLAY_INTERVAL = args.performance_display_interval
-    CHECKPOINT_SAVE_INTERVAL = args.checkpoint_save_interval
-    UPDATE_FREQ = args.update_freq
-    TARGET_UPDATE_FREQ = args.target_update_freq
-    return AGENT_ID, CNN_OUT_SIZE, LSTM_HIDDEN_SIZE, ACTION_SHAPE, ACTION_OUT_SIZE, ATTEN_SIZE, BATCH_SIZE, TIME_STEP, LR, GAMMA, INITIAL_EPSILON, FINAL_EPSILON, EPSILON_VANISH_RATE, TOTAL_EPSIODES, MAX_STEPS, MEMORY_SIZE, PERFORMANCE_DISPLAY_INTERVAL, CHECKPOINT_SAVE_INTERVAL, UPDATE_FREQ, TARGET_UPDATE_FREQ
+def wrap_model_with_dataparallel(models, device_idx):
+    device = torch.device('cuda:' + str(device_idx[0]) if torch.cuda.is_available() else 'cpu')
+    for id in models:
+        if torch.cuda.is_available():
+            models[id] = nn.DataParallel(models[id], device_ids=device_idx).to(device)
+        else:
+            models[id] = models[id].to(device)
+
+def get_agents_id_to_name(env_path):
+    unity_env = UnityEnvironment(env_path)
+    env = MultiUnityWrapper(unity_env=unity_env, uint8_visual=True, allow_multiple_obs=True)
+    agent_ids = tuple(env.agent_id_to_behaviour_name.keys())
+    id_to_name = find_name_of_agents(env.agent_id_to_behaviour_name, agent_ids)
+    return id_to_name
 
 def find_name_of_agents(agent_id_to_behaviour_name, agent_ids):
     agent_id_to_name = {}
@@ -162,5 +117,5 @@ def load_checkpoint(filename, device, dirname='Checkpoint'):
     filepath = os.path.join(dirname, filename)
     checkpoint = torch.load(filepath, map_location=device)
 
-    return checkpoint['model_state_dicts'], checkpoint['optimizer_state_dicts'], checkpoint['total_steps'], checkpoint[
-        'episode_count'], checkpoint['epsilon'], checkpoint['memory']
+    return checkpoint['model_state_dicts'], checkpoint['optimizer_state_dicts'], checkpoint[
+        'episode_count'], checkpoint['epsilon']

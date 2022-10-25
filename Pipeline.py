@@ -30,7 +30,6 @@ class Pipeline:
         self.atten_size = {}
         self.cnn_out_size = {}
         self.lstm_hidden_size = {}
-        self.action_out_size = {}
 
     def initialize_model(self, cnn_out_size, lstm_hidden_size, action_shape, action_out_size, atten_size,
                          device_idx):

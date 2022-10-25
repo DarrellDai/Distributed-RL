@@ -1,0 +1,4 @@
+env_path: 'C:/Unity Projects/Hide and Seek/Environments/2.0/Env_Nav_1_Seeker/Hide and Seek'
+total_episodes: 100
+max_steps: 300
+device_idx: [0]
