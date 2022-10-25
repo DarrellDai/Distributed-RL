@@ -66,6 +66,11 @@ class Actor:
             act[id] = torch.tensor(act[id]).reshape(1, 1, len(act[id])).to(self.device)
             prev_obs[id][0] = prev_obs[id][0].reshape(1, 1, prev_obs[id][0].shape[0], prev_obs[id][0].shape[1],
                                                       prev_obs[id][0].shape[2])
+            print(prev_obs[id][0].get_device())
+            print(act[id].get_device())
+            print(hidden_state[id].get_device())
+            print(cell_state[id].get_device())
+            print(lstm_out[id].get_device())
             model_out = self.model[id](prev_obs[id][0], act[id],
                                        hidden_state=hidden_state[id],
                                        cell_state=cell_state[id], lstm_out=lstm_out[id])
@@ -143,6 +148,7 @@ class Actor:
                 step_count += 1
                 with torch.no_grad():
                     if np.random.rand(1) < epsilon:
+
                         act, hidden_state, cell_state, lstm_out = self.find_random_action_while_updating_LSTM(prev_obs,
                                                                                                               hidden_state,
                                                                                                               cell_state,
@@ -203,6 +209,7 @@ class Actor:
         print("Sync params.")
         for id in self.agent_ids:
             self.model[id].load_state_dict(cPickle.loads(params)[id])
+            self.model[id].to(self.device)
 
     def _wait_until_present(self, name):
         print("Waiting for "+name)
