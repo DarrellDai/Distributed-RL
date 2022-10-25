@@ -7,8 +7,8 @@ atten_size: [15]
 lstm_hidden_size: [512]
 action_shape: [[3,3]]
 action_out_size: [32]
-env_path: '../Env_Nav/Hide and Seek'
-total_episodes: 2000
+env_path: '../Env_Linux_Nav_3_Seekers/Hide and Seek'
+total_episodes_each_actor: 2000
 total_epochs: 200000
 max_steps: 100
 resume: False
