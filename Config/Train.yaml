@@ -1,18 +1,18 @@
-checkpoint_to_load: "Checkpoint_Nav_Human_Play.pth.tar"
+checkpoint_to_load: "Checkpoint_Nav_Human_Play_RL.pth.tar"
 device_idx: [3,4,5,6,7]
 id_to_name: {1: 'Hider 0'}
-name_tensorboard: "CNN_LSTM_DQN_Nav_RL_Hider"
+name_tensorboard: "CNN_LSTM_DQN_Nav_Distributed_RL_Hider"
 cnn_out_size: [500]
 atten_size: [15]
 lstm_hidden_size: [512]
 action_shape: [[3,3]]
 action_out_size: [32]
 env_path: '../Env_Linux_Nav_3_Seekers/Hide and Seek'
-total_episodes_each_actor: 2000
+total_episodes_each_actor: 4000
 total_epochs: 200000
 max_steps: 100
-resume: False
-checkpoint_to_save: "Checkpoint_Nav_Human_Play_RL.pth.tar"
+resume: True
+checkpoint_to_save: "Checkpoint_Nav_Human_Play_distributed_RL.pth.tar"
 batch_size: 25
 time_step: 20
 learning_rate: 0.00025

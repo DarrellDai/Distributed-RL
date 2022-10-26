@@ -5,5 +5,6 @@ save_checkpoint({
                     'model_state_dicts': checkpoint[0],
                     'optimizer_state_dicts': checkpoint[1],
                     'epsilon': 0.99,
-                    "episode_count": 0
+                    'episode_count': 0,
+                    'epoch_count':0
                 }, filename=file)

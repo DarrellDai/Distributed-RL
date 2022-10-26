@@ -26,16 +26,17 @@ class LSTM(nn.Module):
 
     # Input must be tensor
     def forward(self, x, hidden_state, cell_state, out):
+        self.device=x.get_device()
         hidden_state = hidden_state.reshape((hidden_state.shape[1], hidden_state.shape[0]) + hidden_state.shape[2:])
         cell_state = cell_state.reshape((cell_state.shape[1], cell_state.shape[0]) + cell_state.shape[2:])
-        x = x.reshape(x.shape[0], -1, self.input_size).float().to(self.device)
+        x = x.reshape(x.shape[0], -1, self.input_size).float()
         for T in range(x.shape[1]):
             # Calculate weighted outputs as attention to make new input by concatenating with the input
             if out.shape[1] > 1:
-                score = torch.zeros((out.shape[0], 1, out.shape[1]), requires_grad=False).float().to(self.device)
+                score = torch.zeros((out.shape[0], 1, out.shape[1]), requires_grad=False).float()
                 for t in range(out.shape[1]):
                     score[:, :, t] = self.atten_layer(torch.concat((out[:, t, :], hidden_state[0]), 1))
-                weight = nn.Softmax(1)(score)
+                weight = nn.Softmax(1)(score).to(self.device)
                 atten = torch.bmm(weight, out)
                 x_new = torch.concat((x[:, T:T + 1, :], atten), 2)
             else:

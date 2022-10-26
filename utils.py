@@ -118,4 +118,4 @@ def load_checkpoint(filename, device, dirname='Checkpoint'):
     checkpoint = torch.load(filepath, map_location=device)
 
     return checkpoint['model_state_dicts'], checkpoint['optimizer_state_dicts'], checkpoint[
-        'episode_count'], checkpoint['epsilon']
+        'episode_count'], checkpoint['epsilon'], checkpoint['epoch_count']

@@ -23,6 +23,10 @@ class Learner:
         self.device_idx = device_idx
         self._connect = redis.Redis(host=hostname)
         self._connect.delete("params")
+        self._connect.delete("epsilon")
+        self._connect.delete("received")
+        self._connect.delete("Pull params")
+        self._connect.delete("Update")
         self._memory = Distributed_Memory(memsize, self.agent_ids, connect=redis.Redis(host=hostname))
         self._memory.start()
         self.device = torch.device('cuda:' + str(device_idx[0]) if torch.cuda.is_available() else 'cpu')
@@ -59,16 +63,18 @@ class Learner:
         for id in self.agent_ids:
             self.optimizer[id] = torch.optim.Adam(self.main_model[id].parameters(), lr=learning_rate)
         if resume:
-            model_state_dicts, optimizer_state_dicts, episode_count, epsilon = load_checkpoint(
+            model_state_dicts, optimizer_state_dicts, episode_count, epsilon, self.initial_epoch_count = load_checkpoint(
                 checkpoint_to_load, self.device)
-            self._connect.set("episode_count", cPickle.dumps(episode_count))
+            print("Sending epsilon")
+
             self._connect.set("epsilon", cPickle.dumps(epsilon))
             for id in self.agent_ids:
                 self.main_model[id].load_state_dict(model_state_dicts[id])
                 self.optimizer[id].load_state_dict(optimizer_state_dicts[id])
             self.target_model = deepcopy(self.main_model)
         else:
-            self._connect.set("episode_count", cPickle.dumps(0))
+            self.initial_epoch_count=0
+            print("Sending epsilon")
             self._connect.set("epsilon", cPickle.dumps(1))
         self._connect.set("params", cPickle.dumps(self.get_model_state_dict()))
 
@@ -78,7 +84,7 @@ class Learner:
         writer = SummaryWriter(os.path.join("runs", name_tensorboard))
         loss_stat = {}
         self._wait_memory()
-        for epoch in tqdm(range(total_epochs)):
+        for epoch in tqdm(range(self.initial_epoch_count, total_epochs)):
             for id in self.agent_ids:
                 loss_stat[id] = []
             self.learn(batch_size, time_step, gamma, loss_stat)
@@ -107,7 +113,8 @@ class Learner:
                     'model_state_dicts': model_state_dicts,
                     'optimizer_state_dicts': optimizer_state_dicts,
                     'epsilon': cPickle.loads(self._connect.get("epsilon")),
-                    "episode_count": cPickle.loads(self._connect.get("episode_count"))
+                    "episode_count": cPickle.loads(self._connect.get("episode_count")),
+                    "epoch_count": epoch
                 }, filename=checkpoint_to_save)
 
             self._sleep()
@@ -118,6 +125,9 @@ class Learner:
             for batch in batches:
                 hidden_batch, cell_batch, out_batch = self.main_model[id].module.lstm.init_hidden_states_and_outputs(
                     bsize=len(batch))
+                hidden_batch.to(self.device)
+                cell_batch.to(self.device)
+                out_batch.to(self.device)
                 current_visual_obs = []
                 current_vector_obs = []
                 act = []
@@ -155,6 +165,7 @@ class Learner:
                 visual_obs = torch.concat((current_visual_obs, next_visual_obs[:, -1:]), 1)
                 Q_next_max = torch.zeros(len(batch)).float().to(self.device)
                 for batch_idx in range(len(batch)):
+
                     _, _, Q_next, _, _ = self.target_model[id](visual_obs[batch_idx:batch_idx + 1],
                                                                act[batch_idx:batch_idx + 1],
                                                                hidden_state=hidden_batch[
@@ -166,6 +177,7 @@ class Learner:
                     Q_next_max[batch_idx] = torch.max(Q_next.reshape(-1))
                 target_values = rewards[:, time_step - 1] + (gamma * Q_next_max)
                 target_values = target_values.float()
+
                 _, _, Q_s, _, _ = self.main_model[id](current_visual_obs, act,
                                                       hidden_state=hidden_batch, cell_state=cell_batch,
                                                       lstm_out=out_batch)
@@ -195,10 +207,10 @@ if __name__ == "__main__":
     learner.initialize_model(cnn_out_size=param["cnn_out_size"], lstm_hidden_size=param["lstm_hidden_size"],
                              action_shape=param["action_shape"],
                              action_out_size=param["action_out_size"], atten_size=param["atten_size"])
-    learner.initialize_training(learning_rate=param["learning_rate"], resume=True,
+    learner.initialize_training(learning_rate=param["learning_rate"], resume=param["resume"],
                                 checkpoint_to_load=param["checkpoint_to_load"])
     learner.train(batch_size=param["batch_size"], time_step=param["time_step"], gamma=param["gamma"],
                   learning_rate=param["learning_rate"], name_tensorboard=param["name_tensorboard"],
-                  total_epochs=param["total_epochs"], target_update_freq=param["target_update_freq(epochs)"],
+                   total_epochs=param["total_epochs"], target_update_freq=param["target_update_freq(epochs)"],
                   checkpoint_save_interval=param["checkpoint_save_interval"],
                   checkpoint_to_save=param["checkpoint_to_save"])

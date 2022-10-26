@@ -17,11 +17,12 @@ if $leaner; then
 fi
 
 if $actor; then
-    for i in seq $num_actors
+    for i in `seq $num_actors`
     do
-    python Actor.py -n $num_actors -i $(($i-1)) -r $redis_server -d $(((($i-1)/2)+3)) &
+    python Actor.py -n $num_actors -i $(($i-1)) -r $redis_server -d $((($i-1)+4)) -s $(($i-1)) &
     pids="$pids $!"
     done
 fi
-trap 'kill $pids' SIGINT SIGTERM EXIT
+
 wait -n $pids
+trap 'kill $pids' SIGINT SIGTERM EXIT

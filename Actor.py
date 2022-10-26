@@ -10,6 +10,7 @@ import redis
 from tqdm import tqdm
 import time
 import yaml
+import random
 
 from unity_wrappers.envs import MultiUnityWrapper
 from mlagents_envs.environment import UnityEnvironment
@@ -29,6 +30,7 @@ class Actor:
             num_actor=1,
             device_idx=0,
             hostname="localhost",
+            seed=0
 
     ):
         self.id_to_name = id_to_name
@@ -38,9 +40,8 @@ class Actor:
         self.device_idx = device_idx
         self.device = torch.device('cuda:' + str(device_idx) if torch.cuda.is_available() else 'cpu')
         self._connect = redis.Redis(host=hostname)
-        self._connect.delete("received")
-        self._connect.delete("episode_count")
-        self._connect.delete("epsilon")
+        self._connect.delete("experience")
+        random.seed(seed)
 
 
     def initialize_env(self, env_path):
@@ -66,11 +67,6 @@ class Actor:
             act[id] = torch.tensor(act[id]).reshape(1, 1, len(act[id])).to(self.device)
             prev_obs[id][0] = prev_obs[id][0].reshape(1, 1, prev_obs[id][0].shape[0], prev_obs[id][0].shape[1],
                                                       prev_obs[id][0].shape[2])
-            print(prev_obs[id][0].get_device())
-            print(act[id].get_device())
-            print(hidden_state[id].get_device())
-            print(cell_state[id].get_device())
-            print(lstm_out[id].get_device())
             model_out = self.model[id](prev_obs[id][0], act[id],
                                        hidden_state=hidden_state[id],
                                        cell_state=cell_state[id], lstm_out=lstm_out[id])
@@ -112,7 +108,7 @@ class Actor:
 
     def collect_data(self, total_episodes_each_actor, final_epsilon,
                      epsilon_vanish_rate, max_steps, name_tensorboard, actor_update_freq, performance_display_interval):
-
+        print("Start")
         writer = SummaryWriter(os.path.join("runs", name_tensorboard))
         total_reward = {}
         local_memory = {}
@@ -121,15 +117,10 @@ class Actor:
         lstm_out = {}
         alive = {}
         success_num = 0
-        self._wait_until_present("episode_count")
-        episode_count = cPickle.loads(self._connect.get("episode_count"))
-        self._connect.rpush("received", 1)
-        self._wait_until_all_received()
         self._wait_until_present("epsilon")
         epsilon = cPickle.loads(self._connect.get("epsilon"))
-        start_episode = episode_count
 
-        for episode in tqdm(range(start_episode, total_episodes_each_actor)):
+        for episode in tqdm(range(total_episodes_each_actor)):
 
             step_count = 0
             prev_obs = self.env.reset()
@@ -176,12 +167,14 @@ class Actor:
                     prev_obs = deepcopy(obs_dict)
 
             # save performance measure
+            print("Sending memory")
             self._connect.rpush("experience", cPickle.dumps(local_memory))
             if not done:
                 success_num += 1
-            with self._connect.lock("Update params"):
+            with self._connect.lock("Update"):
                 episode_count = cPickle.loads(self._connect.get("episode_count"))
-                self._connect.set("episode_count", cPickle.dumps(episode_count + 1))
+                episode_count=episode_count + 1
+                self._connect.set("episode_count", cPickle.dumps(episode_count))
                 self._connect.set("epsilon", cPickle.dumps(epsilon))
                 for id in self.agent_ids:
                     writer.add_scalar(self.id_to_name[id] + ": Reward/train", total_reward[id], episode_count)
@@ -194,7 +187,7 @@ class Actor:
 
             if (episode + 1) % performance_display_interval == 0:
                 print('\n Episode: [%d | %d] Epsilon : %f \n' % (
-                    episode, start_episode + total_episodes_each_actor, epsilon))
+                    episode, total_episodes_each_actor, epsilon))
                 for id in self.agent_ids:
                     print('\n Agent %d, Reward: %f \n' % (id, total_reward[id]))
 
@@ -204,12 +197,13 @@ class Actor:
         writer.close()
 
     def _pull_params(self):
-        params = self._connect.get("params")
         self._wait_until_present("params")
         print("Sync params.")
-        for id in self.agent_ids:
-            self.model[id].load_state_dict(cPickle.loads(params)[id])
-            self.model[id].to(self.device)
+        with self._connect.lock("Pull params"):
+            params = self._connect.get("params")
+            for id in self.agent_ids:
+                self.model[id].load_state_dict(cPickle.loads(params)[id])
+                self.model[id].to(self.device)
 
     def _wait_until_present(self, name):
         print("Waiting for "+name)
@@ -222,7 +216,6 @@ class Actor:
     def _wait_until_all_received(self):
         while True:
             if self._connect.llen("received") == self.num_actor:
-                self._connect.delete("received")
                 break
             time.sleep(0.1)
 
@@ -233,6 +226,7 @@ if __name__ == "__main__":
     parser.add_argument('-i', '--actor_index', type=int, default=0, help="Index of actor")
     parser.add_argument('-r', '--redisserver', type=str, default='localhost', help="Redis's server name.")
     parser.add_argument('-d', '--device', type=int, default=0, help="Index of GPU to use")
+    parser.add_argument('-s', '--seed', type=int, default=0, help="Seed for randomization")
     args = parser.parse_args()
 
     with open("Config/Train.yaml") as file:
@@ -241,7 +235,7 @@ if __name__ == "__main__":
         id_to_name=param["id_to_name"],
         actor_idx=args.actor_index,
         num_actor=args.num_actors,
-        device_idx=args.device, hostname=args.redisserver)
+        device_idx=args.device, hostname=args.redisserver, seed=args.seed)
     actor.initialize_env(param["env_path"])
     actor.initialize_model(cnn_out_size=param["cnn_out_size"], lstm_hidden_size=param["lstm_hidden_size"],
                            action_shape=param["action_shape"],
