@@ -32,10 +32,10 @@ class Learner:
         self.device = torch.device('cuda:' + str(device_idx[0]) if torch.cuda.is_available() else 'cpu')
 
     def _wait_memory(self):
-        print("Waiting for memory")
+        # print("Waiting for memory")
         while True:
             if len(self._memory) == self._memory.memsize:
-                print("Memory got!")
+                # print("Memory got!")
                 break
             time.sleep(0.1)
 
@@ -65,7 +65,7 @@ class Learner:
         if resume:
             model_state_dicts, optimizer_state_dicts, episode_count, epsilon, self.initial_epoch_count = load_checkpoint(
                 checkpoint_to_load, self.device)
-            print("Sending epsilon")
+            # print("Sending epsilon")
 
             self._connect.set("epsilon", cPickle.dumps(epsilon))
             for id in self.agent_ids:
@@ -74,7 +74,7 @@ class Learner:
             self.target_model = deepcopy(self.main_model)
         else:
             self.initial_epoch_count=0
-            print("Sending epsilon")
+            # print("Sending epsilon")
             self._connect.set("epsilon", cPickle.dumps(1))
         self._connect.set("params", cPickle.dumps(self.get_model_state_dict()))
 

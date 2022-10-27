@@ -7,10 +7,10 @@ from torch.utils.tensorboard import SummaryWriter
 import os
 from copy import deepcopy
 import redis
-from tqdm import tqdm
 import time
 import yaml
 import random
+from itertools import count
 
 from unity_wrappers.envs import MultiUnityWrapper
 from mlagents_envs.environment import UnityEnvironment
@@ -106,9 +106,8 @@ class Actor:
             cell_state[id] = cell_state[id]
         return act, hidden_state, cell_state, lstm_out
 
-    def collect_data(self, total_episodes_each_actor, final_epsilon,
+    def collect_data(self, final_epsilon,
                      epsilon_vanish_rate, max_steps, name_tensorboard, actor_update_freq, performance_display_interval):
-        print("Start")
         writer = SummaryWriter(os.path.join("runs", name_tensorboard))
         total_reward = {}
         local_memory = {}
@@ -120,7 +119,7 @@ class Actor:
         self._wait_until_present("epsilon")
         epsilon = cPickle.loads(self._connect.get("epsilon"))
 
-        for episode in tqdm(range(total_episodes_each_actor)):
+        for episode in count():
 
             step_count = 0
             prev_obs = self.env.reset()
@@ -167,7 +166,7 @@ class Actor:
                     prev_obs = deepcopy(obs_dict)
 
             # save performance measure
-            print("Sending memory")
+            # print("Sending memory")
             self._connect.rpush("experience", cPickle.dumps(local_memory))
             if not done:
                 success_num += 1
@@ -198,7 +197,7 @@ class Actor:
 
     def _pull_params(self):
         self._wait_until_present("params")
-        print("Sync params.")
+        # print("Sync params.")
         with self._connect.lock("Pull params"):
             params = self._connect.get("params")
             for id in self.agent_ids:
@@ -206,10 +205,10 @@ class Actor:
                 self.model[id].to(self.device)
 
     def _wait_until_present(self, name):
-        print("Waiting for "+name)
+        # print("Waiting for "+name)
         while True:
             if not self._connect.get(name) is None:
-                print(name+" received")
+                # print(name+" received")
                 break
             time.sleep(0.1)
 
@@ -240,8 +239,7 @@ if __name__ == "__main__":
     actor.initialize_model(cnn_out_size=param["cnn_out_size"], lstm_hidden_size=param["lstm_hidden_size"],
                            action_shape=param["action_shape"],
                            action_out_size=param["action_out_size"], atten_size=param["atten_size"])
-    actor.collect_data(total_episodes_each_actor=param["total_episodes_each_actor"],
-                       final_epsilon=param["final_epsilon"],
+    actor.collect_data(final_epsilon=param["final_epsilon"],
                        epsilon_vanish_rate=param["epsilon_vanish_rate"], max_steps=param["max_steps"],
                        name_tensorboard=param["name_tensorboard"],
                        actor_update_freq=param["actor_update_freq(episodes)"],
