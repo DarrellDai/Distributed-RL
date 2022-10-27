@@ -27,6 +27,7 @@ class Learner:
         self._connect.delete("received")
         self._connect.delete("Pull params")
         self._connect.delete("Update")
+        self._connect.delete("episode_count")
         self._memory = Distributed_Memory(memsize, self.agent_ids, connect=redis.Redis(host=hostname))
         self._memory.start()
         self.device = torch.device('cuda:' + str(device_idx[0]) if torch.cuda.is_available() else 'cpu')
@@ -65,8 +66,9 @@ class Learner:
         if resume:
             model_state_dicts, optimizer_state_dicts, episode_count, epsilon, self.initial_epoch_count = load_checkpoint(
                 checkpoint_to_load, self.device)
+            # print("episode_count")
+            self._connect.set("episode_count", cPickle.dumps(episode_count))
             # print("Sending epsilon")
-
             self._connect.set("epsilon", cPickle.dumps(epsilon))
             for id in self.agent_ids:
                 self.main_model[id].load_state_dict(model_state_dicts[id])
@@ -74,6 +76,8 @@ class Learner:
             self.target_model = deepcopy(self.main_model)
         else:
             self.initial_epoch_count=0
+            # print("episode_count")
+            self._connect.set("episode_count", cPickle.dumps(0))
             # print("Sending epsilon")
             self._connect.set("epsilon", cPickle.dumps(1))
         self._connect.set("params", cPickle.dumps(self.get_model_state_dict()))
@@ -198,12 +202,12 @@ class Learner:
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='Actor process for distributed reinforcement.')
+    parser = argparse.ArgumentParser(description='Learner process for distributed reinforcement.')
     parser.add_argument('-r', '--redisserver', type=str, default='localhost', help="Redis's server name.")
     args = parser.parse_args()
     with open("Config/Train.yaml") as file:
         param = yaml.safe_load(file)
-    learner = Learner(id_to_name=param["id_to_name"], memsize=30, hostname=args.redisserver, device_idx=param["device_idx"])
+    learner = Learner(id_to_name=param["id_to_name"], memsize=param["memory_size"], hostname=args.redisserver, device_idx=param["device_idx"])
     learner.initialize_model(cnn_out_size=param["cnn_out_size"], lstm_hidden_size=param["lstm_hidden_size"],
                              action_shape=param["action_shape"],
                              action_out_size=param["action_out_size"], atten_size=param["atten_size"])

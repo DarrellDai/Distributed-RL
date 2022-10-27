@@ -184,9 +184,9 @@ class Actor:
             if epsilon > final_epsilon:
                 epsilon *= epsilon_vanish_rate
 
-            if (episode + 1) % performance_display_interval == 0:
-                print('\n Episode: [%d | %d] Epsilon : %f \n' % (
-                    episode, total_episodes_each_actor, epsilon))
+            if episode_count % performance_display_interval == 0:
+                print('\n Episode: [%d] Epsilon : %f \n' % (
+                    episode_count, epsilon))
                 for id in self.agent_ids:
                     print('\n Agent %d, Reward: %f \n' % (id, total_reward[id]))
 
