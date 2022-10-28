@@ -65,17 +65,20 @@ class Human_play:
         # else:
         #     act[0][1] = 0
         return act
-    def play_game(self, real_time_memory_sync=False, hostname='localhost'):
+    def play_game(self, start_episode=0, mem=None, real_time_memory_sync=False, hostname='localhost'):
         if real_time_memory_sync:
             self.initialize_server(hostname)
-        mem = Memory(memsize=self.total_episodes, agent_ids=self.agent_ids)
+        if mem is None:
+            mem = Memory(memsize=self.total_episodes, agent_ids=self.agent_ids)
+        total_reward = {}
         exit = False
-        for _ in tqdm(range(self.total_episodes)):
+        for _ in tqdm(range(start_episode, self.total_episodes)):
             prev_obs = self.env.reset()
             step_count = 0
             local_memory = {}
             for id in self.agent_ids:
                 local_memory[id] = []
+                total_reward[id] = 0
             done = False
             while step_count < self.max_steps and not done:
                 act=self.controller()
@@ -88,12 +91,15 @@ class Human_play:
                 for id in self.agent_ids:
                     local_memory[id].append(
                         (deepcopy(prev_obs[id]), deepcopy(act[id]), deepcopy(reward_dict[id]), deepcopy(obs_dict[id])))
+                    total_reward[id] += reward_dict[id]
                 prev_obs = obs_dict
             mem.add_episode(local_memory)
             if real_time_memory_sync:
                 self.update(local_memory)
             if exit:
                 break
+            for id in self.agent_ids:
+                print('\n Agent %d, Reward: %f \n' % (id, total_reward[id]))
         self.env.close()
         return mem
     def initialize_server(self, hostname='localhost'):
@@ -101,23 +107,33 @@ class Human_play:
         self.connect.delete("experience")
     def real_time_mode(self, hostname='localhost'):
         self.play_game(real_time_memory_sync=True, hostname=hostname)
-    def save_mode(self,checkpoint_name):
-        mem=self.play_game()
-        filename = checkpoint_name + "_"+ datetime.now().isoformat()[:10] + "_" + datetime.now().isoformat()[
+    def save_mode(self, checkpoint_to_save, checkpoint_to_load=None):
+        if not checkpoint_to_load is None:
+            mem=self.load_checkpoint(checkpoint_to_load)
+            print(len(mem))
+            mem = self.play_game(start_episode=len(mem), mem=mem)
+        else:
+            mem=self.play_game()
+        filename = checkpoint_to_save + "_" + datetime.now().isoformat()[:10] + "_" + datetime.now().isoformat()[
                                                                      11:13] + "-" + datetime.now().isoformat()[
                                                                                     14:16] + ".pth.tar"
         save_checkpoint({"memory": mem}, filename=filename)
 
     def load_mode(self, checkpoint_name, hostname='localhost'):
         self.initialize_server(hostname)
-        filepath=os.path.join('Checkpoint', checkpoint_name)
-        checkpoint = torch.load(filepath, self.device)
-        memory=checkpoint["memory"]
+        memory=self.load_checkpoint(checkpoint_name)
         for i in range(len(memory)):
             local_memory = {}
             for id in self.agent_ids:
                 local_memory[id] = memory.memory[id][i]
             self.update(local_memory)
+    def load_checkpoint(self, checkpoint_name):
+        filepath = os.path.join('Checkpoint', checkpoint_name)
+        checkpoint = torch.load(filepath, self.device)
+        memory = checkpoint["memory"]
+        return memory
+
+
     def update(self, local_memory):
         self.connect.rpush("experience", cPickle.dumps(local_memory))
         with self.connect.lock("Update"):
@@ -135,7 +151,7 @@ class Human_play:
 
 if __name__=="__main__":
     parser = argparse.ArgumentParser(description='Learner process for distributed reinforcement.')
-    parser.add_argument('-m', '--mode', type=str, default='l', help="Runing mode. s:save_mode, l:load_mode, r: real time mode")
+    parser.add_argument('-m', '--mode', type=str, default='s', help="Runing mode. s:save_mode, l:load_mode, r: real time mode")
     args=parser.parse_args()
     with open("config/Human_Play.yaml") as file:
         param = yaml.safe_load(file)
@@ -145,15 +161,15 @@ if __name__=="__main__":
     device_idx = param["device_idx"]
     id_to_name=param["id_to_name"]
     hostname = param["hostname"]
+    checkpoint_to_load = param["checkpoint_to_load"]
     human_play=Human_play(id_to_name=id_to_name, device_idx=device_idx)
     if args.mode=='l':
-        checkpoint_to_load = param["checkpoint_to_load"]
         human_play.load_mode(checkpoint_name=checkpoint_to_load, hostname=hostname)
     else:
         human_play.initialize_env(env_path=env_path,max_steps=max_steps,total_episodes=total_episodes)
         if args.mode=='s':
             checkpoint_save_name=param["checkpoint_save_name"]
-            human_play.save_mode(checkpoint_name=checkpoint_save_name)
+            human_play.save_mode(checkpoint_to_save=checkpoint_save_name, checkpoint_to_load=checkpoint_to_load)
         else:
             human_play.real_time_mode(hostname)
         
