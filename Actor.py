@@ -115,7 +115,6 @@ class Actor:
         cell_state = {}
         lstm_out = {}
         alive = {}
-        success_num = 0
         self._wait_until_present("epsilon")
         epsilon = cPickle.loads(self._connect.get("epsilon"))
 
@@ -168,16 +167,18 @@ class Actor:
             # save performance measure
             # print("Sending memory")
             self._connect.rpush("experience", cPickle.dumps(local_memory))
-            if not done:
-                success_num += 1
             with self._connect.lock("Update"):
                 episode_count = cPickle.loads(self._connect.get("episode_count"))
-                episode_count=episode_count + 1
+                episode_count+= + 1
                 self._connect.set("episode_count", cPickle.dumps(episode_count))
+                success_count = cPickle.loads(self._connect.get("success_count"))
+                if not done:
+                    success_count += 1
+                self._connect.set("success_count", cPickle.dumps(success_count))
                 self._connect.set("epsilon", cPickle.dumps(epsilon))
                 for id in self.agent_ids:
                     writer.add_scalar(self.id_to_name[id] + ": Reward/train", total_reward[id], episode_count)
-                    writer.add_scalar(self.id_to_name[id] + ": Success Rate/train", success_num / episode_count,
+                    writer.add_scalar(self.id_to_name[id] + ": Success Rate/train", success_count / episode_count,
                                       episode_count)
                 writer.flush()
 

@@ -64,12 +64,13 @@ class Learner:
         for id in self.agent_ids:
             self.optimizer[id] = torch.optim.Adam(self.main_model[id].parameters(), lr=learning_rate)
         if resume:
-            model_state_dicts, optimizer_state_dicts, episode_count, epsilon, self.initial_epoch_count = load_checkpoint(
+            model_state_dicts, optimizer_state_dicts, episode_count, epsilon, self.initial_epoch_count, success_count = load_checkpoint(
                 checkpoint_to_load, self.device)
             # print("episode_count")
             self._connect.set("episode_count", cPickle.dumps(episode_count))
             # print("Sending epsilon")
             self._connect.set("epsilon", cPickle.dumps(epsilon))
+            self._connect.set("success_count", cPickle.dumps(success_count))
             for id in self.agent_ids:
                 self.main_model[id].load_state_dict(model_state_dicts[id])
                 self.optimizer[id].load_state_dict(optimizer_state_dicts[id])
@@ -80,6 +81,7 @@ class Learner:
             self._connect.set("episode_count", cPickle.dumps(0))
             # print("Sending epsilon")
             self._connect.set("epsilon", cPickle.dumps(1))
+            self._connect.set("success_count", cPickle.dumps(0))
         self._connect.set("params", cPickle.dumps(self.get_model_state_dict()))
 
     def train(self, batch_size, time_step, gamma, learning_rate, name_tensorboard, total_epochs, target_update_freq,
@@ -118,7 +120,8 @@ class Learner:
                     'optimizer_state_dicts': optimizer_state_dicts,
                     'epsilon': cPickle.loads(self._connect.get("epsilon")),
                     "episode_count": cPickle.loads(self._connect.get("episode_count")),
-                    "epoch_count": epoch
+                    "epoch_count": epoch,
+                    "success_count": cPickle.loads(self._connect.get("success_count"))
                 }, filename=checkpoint_to_save)
 
             self._sleep()
