@@ -229,6 +229,9 @@ class Actor:
 
 
 if __name__ == "__main__":
+    os.environ['OMP_NUM_THREADS'] = '1'
+    os.environ['MKL_NUM_THREADS'] = '1'
+    os.environ['IN_MPI'] = '1'
     parser = argparse.ArgumentParser(description='Actor process for distributed reinforcement.')
     parser.add_argument('-n', '--num_actors', type=int, default=1, help='Actor number.')
     parser.add_argument('-i', '--actor_index', type=int, default=0, help="Index of actor")
