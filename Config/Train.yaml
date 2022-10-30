@@ -1,17 +1,17 @@
-checkpoint_to_load: "Checkpoint_Nav_Human_Play_Distributed_RL.pth.tar"
-device_idx: [4,5,6,7]
+checkpoint_to_load: "Checkpoint_Nav_Distributed_RL.pth.tar"
+device_idx: [3,4,5,6,7]
 id_to_name: {1: 'Hider 0'}
-name_tensorboard: "CNN_LSTM_DQN_Nav_Human_Play_Distributed_RL_Hider"
+name_tensorboard: "CNN_LSTM_DQN_Nav_Distributed_RL_Hider"
 cnn_out_size: [500]
 atten_size: [15]
 lstm_hidden_size: [512]
 action_shape: [[3,3]]
 action_out_size: [32]
-env_path: '../Env_Linux_Nav_3_Seekers_Big_Rocks/Hide and Seek'
+env_path: '../Env_Linux_Nav_3_Seekers_Big_Rocks_No_Waiting_Time/Hide and Seek'
 total_epochs: 20000
 max_steps: 150
 resume: False
-checkpoint_to_save: "Checkpoint_Nav_Human_Play_Distributed_RL.pth.tar"
+checkpoint_to_save: "Checkpoint_Nav_Distributed_RL.pth.tar"
 batch_size: 25
 time_step: 20
 learning_rate: 0.00025
@@ -21,6 +21,6 @@ final_epsilon: 0.1
 epsilon_vanish_rate: 0.9999
 memory_size: 100
 performance_display_interval(epochs): 5
-checkpoint_save_interval: 25
+checkpoint_save_interval(epochs): 25
 actor_update_freq(epochs): 10
 target_update_freq(epochs): 25

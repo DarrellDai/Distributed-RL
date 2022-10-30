@@ -25,9 +25,10 @@ class Learner:
         self._connect.delete("params")
         self._connect.delete("epsilon")
         self._connect.delete("received")
-        self._connect.delete("Pull params")
+        self._connect.delete("Update params")
         self._connect.delete("Update")
         self._connect.delete("episode_count")
+        self._connect.delete("epoch")
         self._memory = Distributed_Memory(memsize, self.agent_ids, connect=redis.Redis(host=hostname))
         self._memory.start()
         self.device = torch.device('cuda:' + str(device_idx[0]) if torch.cuda.is_available() else 'cpu')
@@ -226,5 +227,5 @@ if __name__ == "__main__":
     learner.train(batch_size=param["batch_size"], time_step=param["time_step"], gamma=param["gamma"],
                   learning_rate=param["learning_rate"], name_tensorboard=param["name_tensorboard"],
                    total_epochs=param["total_epochs"], actor_update_freq=param["actor_update_freq(epochs)"], target_update_freq=param["target_update_freq(epochs)"],
-                  checkpoint_save_interval=param["checkpoint_save_interval"],
+                  checkpoint_save_interval=param["checkpoint_save_interval(epochs)"],
                   checkpoint_to_save=param["checkpoint_to_save"])

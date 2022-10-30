@@ -121,7 +121,7 @@ class Actor:
         self._wait_until_present("epsilon")
         epsilon = cPickle.loads(self._connect.get("epsilon"))
 
-        for episode in count():
+        for _ in count():
 
             step_count = 0
             prev_obs = self.env.reset()
@@ -176,6 +176,7 @@ class Actor:
                     self.memory.replay_buffer[id].clear()
 
             with self._connect.lock("Update"):
+                self._wait_until_present("episode_count")
                 episode_count = cPickle.loads(self._connect.get("episode_count"))
                 episode_count+= + 1
                 self._connect.set("episode_count", cPickle.dumps(episode_count))
@@ -184,6 +185,7 @@ class Actor:
                     success_count += 1
                 self._connect.set("success_count", cPickle.dumps(success_count))
                 self._connect.set("epsilon", cPickle.dumps(epsilon))
+                self._wait_until_present("epoch")
                 epoch=cPickle.loads(self._connect.get("epoch"))
                 for id in self.agent_ids:
                     writer.add_scalar(self.id_to_name[id] + ": Reward/train", total_reward[id], epoch)
@@ -257,4 +259,4 @@ if __name__ == "__main__":
                        epsilon_vanish_rate=param["epsilon_vanish_rate"], max_steps=param["max_steps"],
                        name_tensorboard=param["name_tensorboard"],
                        actor_update_freq=param["actor_update_freq(epochs)"],
-                       performance_display_interval=param["performance_display_interval"])
+                       performance_display_interval=param["performance_display_interval(epochs)"])
