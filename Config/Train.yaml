@@ -20,7 +20,7 @@ initial_epsilon: 1.0
 final_epsilon: 0.1
 epsilon_vanish_rate: 0.9999
 memory_size: 100
-performance_display_interval: 20
+performance_display_interval(epochs): 5
 checkpoint_save_interval: 25
-actor_update_freq(episodes): 10
-target_update_freq(epochs): 50
+actor_update_freq(epochs): 10
+target_update_freq(epochs): 25

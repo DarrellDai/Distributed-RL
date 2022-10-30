@@ -84,7 +84,7 @@ class Learner:
             self._connect.set("success_count", cPickle.dumps(0))
         self._connect.set("params", cPickle.dumps(self.get_model_state_dict()))
 
-    def train(self, batch_size, time_step, gamma, learning_rate, name_tensorboard, total_epochs, target_update_freq,
+    def train(self, batch_size, time_step, gamma, learning_rate, name_tensorboard, total_epochs, actor_update_freq, target_update_freq,
               checkpoint_save_interval, checkpoint_to_save):
 
         writer = SummaryWriter(os.path.join("runs", name_tensorboard))
@@ -94,7 +94,10 @@ class Learner:
             for id in self.agent_ids:
                 loss_stat[id] = []
             self.learn(batch_size, time_step, gamma, loss_stat)
-            self._connect.set("params", cPickle.dumps(self.get_model_state_dict()))
+            if epoch % actor_update_freq==0:
+                with self._connect.lock("Update params"):
+                    self._connect.set("params", cPickle.dumps(self.get_model_state_dict()))
+            self._connect.set("epoch", cPickle.dumps(epoch))
             print('\n Epoch: [%d | %d] LR: %f \n' % (epoch, total_epochs, learning_rate))
             loss = {}
             for id in self.agent_ids:
@@ -222,6 +225,6 @@ if __name__ == "__main__":
                                 checkpoint_to_load=param["checkpoint_to_load"])
     learner.train(batch_size=param["batch_size"], time_step=param["time_step"], gamma=param["gamma"],
                   learning_rate=param["learning_rate"], name_tensorboard=param["name_tensorboard"],
-                   total_epochs=param["total_epochs"], target_update_freq=param["target_update_freq(epochs)"],
+                   total_epochs=param["total_epochs"], actor_update_freq=param["actor_update_freq(epochs)"], target_update_freq=param["target_update_freq(epochs)"],
                   checkpoint_save_interval=param["checkpoint_save_interval"],
                   checkpoint_to_save=param["checkpoint_to_save"])

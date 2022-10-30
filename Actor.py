@@ -184,22 +184,24 @@ class Actor:
                     success_count += 1
                 self._connect.set("success_count", cPickle.dumps(success_count))
                 self._connect.set("epsilon", cPickle.dumps(epsilon))
+                epoch=cPickle.loads(self._connect.get("epoch"))
                 for id in self.agent_ids:
-                    writer.add_scalar(self.id_to_name[id] + ": Reward/train", total_reward[id], episode_count)
+                    writer.add_scalar(self.id_to_name[id] + ": Reward/train", total_reward[id], epoch)
                     writer.add_scalar(self.id_to_name[id] + ": Success Rate/train", success_count / episode_count,
-                                      episode_count)
+                                      epoch)
                 writer.flush()
 
-            if epsilon > final_epsilon:
-                epsilon *= epsilon_vanish_rate
 
-            if episode_count % performance_display_interval == 0:
-                print('\n Episode: [%d] Epsilon : %f \n' % (
-                    episode_count, epsilon))
+
+            if epoch % performance_display_interval == 0:
+                print('\n Epoch: [%d] Epsilon : %f \n' % (
+                    epoch, epsilon))
                 for id in self.agent_ids:
                     print('\n Agent %d, Reward: %f \n' % (id, total_reward[id]))
 
-            if (episode + 1) % actor_update_freq == 0:
+            if (epoch) % actor_update_freq == 0:
+                if epsilon > final_epsilon:
+                    epsilon *= epsilon_vanish_rate
                 self._pull_params()
 
         writer.close()
@@ -207,7 +209,7 @@ class Actor:
     def _pull_params(self):
         self._wait_until_present("params")
         # print("Sync params.")
-        with self._connect.lock("Pull params"):
+        with self._connect.lock("Update params"):
             params = self._connect.get("params")
             for id in self.agent_ids:
                 self.model[id].load_state_dict(cPickle.loads(params)[id])
@@ -254,5 +256,5 @@ if __name__ == "__main__":
     actor.collect_data(final_epsilon=param["final_epsilon"],
                        epsilon_vanish_rate=param["epsilon_vanish_rate"], max_steps=param["max_steps"],
                        name_tensorboard=param["name_tensorboard"],
-                       actor_update_freq=param["actor_update_freq(episodes)"],
+                       actor_update_freq=param["actor_update_freq(epochs)"],
                        performance_display_interval=param["performance_display_interval"])
