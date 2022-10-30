@@ -20,6 +20,7 @@ from utils import initialize_model, find_optimal_action, \
     wrap_model_with_dataparallel, \
     find_hidden_cell_out_of_an_action, \
     combine_out
+from Experience_Replay import Memory
 
 
 class Actor:
@@ -29,6 +30,7 @@ class Actor:
             actor_idx=0,
             num_actor=1,
             device_idx=0,
+            memory_size=100,
             hostname="localhost",
             seed=0
 
@@ -38,6 +40,7 @@ class Actor:
         self.actor_idx = actor_idx
         self.num_actor = num_actor
         self.device_idx = device_idx
+        self.memory=Memory(memory_size, self.agent_ids)
         self.device = torch.device('cuda:' + str(device_idx) if torch.cuda.is_available() else 'cpu')
         self._connect = redis.Redis(host=hostname)
         self._connect.delete("experience")
@@ -166,7 +169,12 @@ class Actor:
 
             # save performance measure
             # print("Sending memory")
-            self._connect.rpush("experience", cPickle.dumps(local_memory))
+            self.memory.add_episode(local_memory)
+            if len(self.memory)>=self.memory.memsize/self.num_actor:
+                self._connect.rpush("experience", cPickle.dumps(self.memory))
+                for id in self.agent_ids:
+                    self.memory.replay_buffer[id].clear()
+
             with self._connect.lock("Update"):
                 episode_count = cPickle.loads(self._connect.get("episode_count"))
                 episode_count+= + 1
@@ -235,7 +243,7 @@ if __name__ == "__main__":
         id_to_name=param["id_to_name"],
         actor_idx=args.actor_index,
         num_actor=args.num_actors,
-        device_idx=args.device, hostname=args.redisserver, seed=args.seed)
+        device_idx=args.device, memory_size=param["memory_size"], hostname=args.redisserver, seed=args.seed)
     actor.initialize_env(param["env_path"])
     actor.initialize_model(cnn_out_size=param["cnn_out_size"], lstm_hidden_size=param["lstm_hidden_size"],
                            action_shape=param["action_shape"],

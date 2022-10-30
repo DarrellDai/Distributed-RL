@@ -22,11 +22,12 @@ class Human_play:
     def __init__(
             self,
             id_to_name,
-            device_idx=0,
-
+            num_actor=1,
+            device_idx=0
     ):
         self.id_to_name = id_to_name
         self.agent_ids = tuple(id_to_name.keys())
+        self.num_actor=num_actor
         self.device_idx = device_idx
         self.device = torch.device('cuda:' + str(device_idx) if torch.cuda.is_available() else 'cpu')
     def initialize_env(self, env_path, max_steps, total_episodes):
@@ -95,7 +96,11 @@ class Human_play:
                 prev_obs = obs_dict
             mem.add_episode(local_memory)
             if real_time_memory_sync:
-                self.update(local_memory)
+                self.update(local)
+                if len(mem) >= mem.memsize / self.num_actor:
+                    self.connect.rpush("experience", cPickle.dumps(mem))
+                    for id in agent_ids:
+                        mem.replay_buffer[id].clear()
             if exit:
                 break
             for id in self.agent_ids:
@@ -122,11 +127,7 @@ class Human_play:
     def load_mode(self, checkpoint_name, hostname='localhost'):
         self.initialize_server(hostname)
         memory=self.load_checkpoint(checkpoint_name)
-        for i in range(len(memory)):
-            local_memory = {}
-            for id in self.agent_ids:
-                local_memory[id] = memory.memory[id][i]
-            self.update(local_memory)
+        self.connect.rpush("experience", cPickle.dumps(memory))
     def load_checkpoint(self, checkpoint_name):
         filepath = os.path.join('Checkpoint', checkpoint_name)
         checkpoint = torch.load(filepath, self.device)
@@ -134,8 +135,7 @@ class Human_play:
         return memory
 
 
-    def update(self, local_memory):
-        self.connect.rpush("experience", cPickle.dumps(local_memory))
+    def update(self):
         with self.connect.lock("Update"):
             self.wait_until_present("episode_count")
             episode_count = cPickle.loads(self.connect.get("episode_count"))
@@ -153,7 +153,7 @@ if __name__=="__main__":
     parser = argparse.ArgumentParser(description='Learner process for distributed reinforcement.')
     parser.add_argument('-m', '--mode', type=str, default='s', help="Runing mode. s:save_mode, l:load_mode, r: real time mode")
     args=parser.parse_args()
-    with open("config/Human_Play.yaml") as file:
+    with open("Config/Human_Play.yaml") as file:
         param = yaml.safe_load(file)
     env_path=param["env_path"]
     total_episodes=param["total_episodes"]

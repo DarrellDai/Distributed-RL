@@ -207,8 +207,9 @@ class Learner:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Learner process for distributed reinforcement.')
     parser.add_argument('-r', '--redisserver', type=str, default='localhost', help="Redis's server name.")
+    parser.add_argument('-c', '--config', type=str, default='Train.yaml', help="Config file name")
     args = parser.parse_args()
-    with open("Config/Train.yaml") as file:
+    with open("Config/"+args.config) as file:
         param = yaml.safe_load(file)
     learner = Learner(id_to_name=param["id_to_name"], memsize=param["memory_size"], hostname=args.redisserver, device_idx=param["device_idx"])
     learner.initialize_model(cnn_out_size=param["cnn_out_size"], lstm_hidden_size=param["lstm_hidden_size"],

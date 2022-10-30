@@ -1,6 +1,6 @@
 from utils import load_checkpoint, save_checkpoint
 
-file = "Checkpoint_Nav_Human_Play_RL.pth.tar"
+file = "Checkpoint_Nav_Human_Play_distributed_RL.pth.tar"
 checkpoint = load_checkpoint(file, "cuda")
 save_checkpoint({
     'model_state_dicts': checkpoint[0],
