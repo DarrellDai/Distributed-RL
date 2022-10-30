@@ -109,7 +109,7 @@ class Pipeline:
                 prev_obs = obs_dict
             memory.add_episode(local_memory)
 
-        print('\n Populated with %d Episodes' % (len(memory.memory[memory.agent_ids[0]])))
+        print('\n Populated with %d Episodes' % (len(memory.replay_buffer[memory.agent_ids[0]])))
 
     def find_random_action_while_updating_LSTM(self, prev_obs, hidden_state, cell_state, lstm_out):
         act = {}
