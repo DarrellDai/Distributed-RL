@@ -118,7 +118,7 @@ class Actor:
         alive = {}
         wait_until_present(self._connect, "epsilon")
         epsilon = cPickle.loads(self._connect.get("epsilon"))
-        print("Actor:{} got epsilon".format(self.actor_idx))
+        # print("Actor {} got epsilon".format(self.actor_idx))
         prev_epoch = -1
 
         for _ in count():
@@ -170,9 +170,9 @@ class Actor:
             # save performance measure
             # print("Sending memory")
             self.memory.add_episode(local_memory)
-            print("Actor:{} got {}/{} episodes".format(self.actor_idx, len(self.memory), int(np.ceil(self.memory.memsize / self.num_actor))))
+            # print("Actor {} got {}/{} episodes".format(self.actor_idx, len(self.memory), int(np.ceil(self.memory.memsize / self.num_actor))))
             if len(self.memory) >= self.memory.memsize / self.num_actor:
-                print("Sending memory")
+                # print("Sending memory")
                 with self._connect.lock("Update Experience"):
                     self._connect.rpush("experience", cPickle.dumps(self.memory))
                 for id in self.agent_ids:
@@ -181,18 +181,18 @@ class Actor:
             with self._connect.lock("Update"):
                 wait_until_present(self._connect, "episode_count")
                 episode_count = cPickle.loads(self._connect.get("episode_count"))
-                print("Actor:{} got episode_count".format(self.actor_idx))
+                # print("Actor {} got episode_count".format(self.actor_idx))
                 episode_count += + 1
                 self._connect.set("episode_count", cPickle.dumps(episode_count))
                 success_count = cPickle.loads(self._connect.get("success_count"))
-                print("Actor:{} got success_count".format(self.actor_idx))
+                # print("Actor {} got success_count".format(self.actor_idx))
                 if not done:
                     success_count += 1
                 self._connect.set("success_count", cPickle.dumps(success_count))
                 self._connect.set("epsilon", cPickle.dumps(epsilon))
                 wait_until_present(self._connect, "epoch")
                 epoch = cPickle.loads(self._connect.get("epoch"))
-                print("Actor:{} got epoch".format(self.actor_idx))
+                # print("Actor {} got epoch".format(self.actor_idx))
                 for id in self.agent_ids:
                     writer.add_scalar(self.id_to_name[id] + ": Reward/train", total_reward[id], episode_count)
                 writer.flush()
@@ -218,9 +218,6 @@ class Actor:
 
 
 if __name__ == "__main__":
-    os.environ['OMP_NUM_THREADS'] = '1'
-    os.environ['MKL_NUM_THREADS'] = '1'
-    os.environ['IN_MPI'] = '1'
     parser = argparse.ArgumentParser(description='Actor process for distributed reinforcement.')
     parser.add_argument('-n', '--num_actors', type=int, default=1, help='Actor number.')
     parser.add_argument('-i', '--actor_index', type=int, default=0, help="Index of actor")

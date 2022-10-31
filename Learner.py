@@ -110,10 +110,10 @@ class Learner:
                 self._connect.set("epsilon", cPickle.dumps(self.epsilon))
                 wait_until_present(self._connect, "success_count")
                 success_count=cPickle.loads(self._connect.get("success_count"))
-                print("Learner got success_count")
+                # print("Learner got success_count")
                 wait_until_present(self._connect, "episode_count")
                 episode_count = cPickle.loads(self._connect.get("episode_count"))
-                print("Learner got episode_count")
+                # print("Learner got episode_count")
 
             loss = {}
             for id in self.agent_ids:

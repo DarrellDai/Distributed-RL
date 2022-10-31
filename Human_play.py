@@ -150,9 +150,6 @@ class Human_play:
             time.sleep(0.1)
 
 if __name__=="__main__":
-    os.environ['OMP_NUM_THREADS'] = '1'
-    os.environ['MKL_NUM_THREADS'] = '1'
-    os.environ['IN_MPI'] = '1'
     parser = argparse.ArgumentParser(description='Learner process for distributed reinforcement.')
     parser.add_argument('-m', '--mode', type=str, default='s', help="Runing mode. s:save_mode, l:load_mode, r: real time mode")
     args=parser.parse_args()
