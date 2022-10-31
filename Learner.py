@@ -26,12 +26,11 @@ class Learner:
         self._connect = redis.Redis(host=hostname)
         self._connect.delete("params")
         self._connect.delete("epsilon")
-        self._connect.delete("received")
-        self._connect.delete("Update params")
-        self._connect.delete("Update")
         self._connect.delete("episode_count")
         self._connect.delete("epoch")
         self._connect.delete("reward")
+        self._connect.delete("Update Experience")
+        self._connect.delete("Update Reward")
         self._memory = Distributed_Memory(memsize, self.agent_ids, connect=redis.Redis(host=hostname))
         self._memory.start()
         self.device = torch.device('cuda:' + str(device_idx[0]) if torch.cuda.is_available() else 'cpu')
@@ -116,17 +115,13 @@ class Learner:
                 episode_count = cPickle.loads(self._connect.get("episode_count"))
                 print("Learner got episode_count")
 
-            mean_reward = self.find_mean_reward()
-
-
             loss = {}
             for id in self.agent_ids:
                 if len(loss_stat[id]) > 0:
                     loss[id] = np.mean(loss_stat[id])
                 else:
                     loss[id] = 0
-                print('\n Agent %d, Loss: %f \n' % (id, loss[id]))
-                writer.add_scalar(self.id_to_name[id] + ": Reward/train", mean_reward[id], epoch)
+                #todo: success_count should be associated to player type
                 writer.add_scalar(self.id_to_name[id] + ": Success Rate/train",
                                   success_count / episode_count,
                                   epoch)
@@ -153,31 +148,10 @@ class Learner:
             if (epoch + 1) % performance_display_interval == 0:
                 print('\n Epoch: [%d | %d] LR: %f Epsilon : %f \n' % (epoch, total_epochs, learning_rate, self.epsilon))
                 for id in self.agent_ids:
-                    print('\n Agent %d, Reward: %f \n' % (id, mean_reward[id]))
+                    print('\n Agent %d, Loss: %f \n' % (id, loss[id]))
 
 
             self._sleep()
-
-    def find_mean_reward(self):
-        pipe = self._connect.pipeline()
-        pipe.lrange("reward", 0, -1)
-        pipe.ltrim("reward", -1, 0)
-        rewards = pipe.execute()[0]
-        if not rewards is None:
-            num = len(rewards)
-            for id in self.agent_ids:
-                total_reward = {}
-                total_reward[id] = 0
-            for reward in rewards:
-                loaded_reward=cPickle.loads(reward)
-                for id in self.agent_ids:
-                    total_reward[id] += loaded_reward[id]
-                    print(loaded_reward[id])
-            for id in self.agent_ids:
-                mean_reward = {}
-                mean_reward[id] = total_reward[id] / num
-            print("Learner got reward (number: {})".format(num))
-        return mean_reward
 
     def learn(self, batch_size, time_step, gamma, loss_stat):
         for id in self.agent_ids:

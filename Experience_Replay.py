@@ -1,11 +1,13 @@
-from collections import deque
-import random
-import numpy as np
-from copy import deepcopy
-import threading
-import redis
-import time
 import _pickle as cPickle
+import random
+import threading
+import time
+from collections import deque
+
+import numpy as np
+import redis
+
+
 class Memory():
 
     def __init__(self, memsize, agent_ids):
@@ -23,9 +25,9 @@ class Memory():
     def get_batch(self, bsize, time_step, agent_id):
         self.check_dimension()
         batches = []
-        memory_long_enough =[]
+        memory_long_enough = []
         for episode in self.replay_buffer[agent_id]:
-            if len(episode)>=time_step:
+            if len(episode) >= time_step:
                 memory_long_enough.append(episode)
         for _ in range(int(np.ceil(len(memory_long_enough) / bsize))):
             batches.append([])
@@ -48,12 +50,13 @@ class Memory():
     def __len__(self):
         return len(self.replay_buffer[self.agent_ids[0]])
 
+
 class Distributed_Memory(threading.Thread):
 
     def __init__(self, memsize, agent_ids, connect=redis.Redis(host="localhost")):
         super().__init__()
         self.setDaemon(True)
-        self.memsize=memsize
+        self.memsize = memsize
         self._memory = Memory(memsize, agent_ids)
         self._connect = connect
         self._connect.delete("experience")
@@ -61,19 +64,20 @@ class Distributed_Memory(threading.Thread):
 
     def run(self):
         while True:
-            pipe = self._connect.pipeline()
-            pipe.lrange("experience", 0, -1)
-            pipe.ltrim("experience", -1, 0)
-            memories = pipe.execute()[0]
-            if not memories is None:
-                for memory in memories:
-                    load_memory = cPickle.loads(memory)
-                    with self._lock:
-                        for i in range(len(load_memory)):
-                            episode = {}
-                            for id in load_memory.agent_ids:
-                                episode[id] = load_memory.replay_buffer[id][i]
-                            self._memory.add_episode(episode)
+            with self._connect.lock("Update Experience"):
+                pipe = self._connect.pipeline()
+                pipe.lrange("experience", 0, -1)
+                pipe.delete("experience")
+                memories = pipe.execute()[0]
+                if not memories is None:
+                    for memory in memories:
+                        load_memory = cPickle.loads(memory)
+                        with self._lock:
+                            for i in range(len(load_memory)):
+                                episode = {}
+                                for id in load_memory.agent_ids:
+                                    episode[id] = load_memory.replay_buffer[id][i]
+                                self._memory.add_episode(episode)
             time.sleep(0.01)
 
     def get_batch(self, bsize, time_step, agent_id):

@@ -109,6 +109,7 @@ class Actor:
         return act, hidden_state, cell_state, lstm_out
 
     def collect_data(self, max_steps, name_tensorboard, actor_update_freq):
+        writer = SummaryWriter(os.path.join("runs", name_tensorboard))
         total_reward = {}
         local_memory = {}
         hidden_state = {}
@@ -171,8 +172,9 @@ class Actor:
             self.memory.add_episode(local_memory)
             print("Actor:{} got {}/{} episodes".format(self.actor_idx, len(self.memory), int(np.ceil(self.memory.memsize / self.num_actor))))
             if len(self.memory) >= self.memory.memsize / self.num_actor:
-                print("sending memory")
-                self._connect.rpush("experience", cPickle.dumps(self.memory))
+                print("Sending memory")
+                with self._connect.lock("Update Experience"):
+                    self._connect.rpush("experience", cPickle.dumps(self.memory))
                 for id in self.agent_ids:
                     self.memory.replay_buffer[id].clear()
 
@@ -191,7 +193,10 @@ class Actor:
                 wait_until_present(self._connect, "epoch")
                 epoch = cPickle.loads(self._connect.get("epoch"))
                 print("Actor:{} got epoch".format(self.actor_idx))
-            self._connect.rpush("reward", cPickle.dumps(total_reward))
+                for id in self.agent_ids:
+                    writer.add_scalar(self.id_to_name[id] + ": Reward/train", total_reward[id], episode_count)
+                writer.flush()
+
 
 
 
