@@ -19,7 +19,7 @@ import _pickle as cPickle
 from utils import initialize_model, find_optimal_action, \
     wrap_model_with_dataparallel, \
     find_hidden_cell_out_of_an_action, \
-    combine_out
+    combine_out, wait_until_present, wait_until_all_received
 from Experience_Replay import Memory
 
 
@@ -40,12 +40,11 @@ class Actor:
         self.actor_idx = actor_idx
         self.num_actor = num_actor
         self.device_idx = device_idx
-        self.memory=Memory(memory_size, self.agent_ids)
+        self.memory = Memory(memory_size, self.agent_ids)
         self.device = torch.device('cuda:' + str(device_idx) if torch.cuda.is_available() else 'cpu')
         self._connect = redis.Redis(host=hostname)
         self._connect.delete("experience")
         random.seed(seed)
-
 
     def initialize_env(self, env_path):
         unity_env = UnityEnvironment(env_path, worker_id=self.actor_idx)
@@ -53,7 +52,7 @@ class Actor:
 
     def initialize_model(self, cnn_out_size, lstm_hidden_size, action_shape, action_out_size, atten_size):
         self.action_shape = {}
-        self.atten_size={}
+        self.atten_size = {}
         for idx in range(len(self.agent_ids)):
             self.action_shape[self.agent_ids[idx]] = tuple(action_shape[idx])
             self.atten_size[self.agent_ids[idx]] = atten_size[idx]
@@ -109,17 +108,17 @@ class Actor:
             cell_state[id] = cell_state[id]
         return act, hidden_state, cell_state, lstm_out
 
-    def collect_data(self, final_epsilon,
-                     epsilon_vanish_rate, max_steps, name_tensorboard, actor_update_freq, performance_display_interval):
-        writer = SummaryWriter(os.path.join("runs", name_tensorboard))
+    def collect_data(self, max_steps, name_tensorboard, actor_update_freq):
         total_reward = {}
         local_memory = {}
         hidden_state = {}
         cell_state = {}
         lstm_out = {}
         alive = {}
-        self._wait_until_present("epsilon")
+        wait_until_present(self._connect, "epsilon")
         epsilon = cPickle.loads(self._connect.get("epsilon"))
+        print("Actor:{} got epsilon".format(self.actor_idx))
+        prev_epoch = -1
 
         for _ in count():
 
@@ -170,46 +169,39 @@ class Actor:
             # save performance measure
             # print("Sending memory")
             self.memory.add_episode(local_memory)
-            if len(self.memory)>=self.memory.memsize/self.num_actor:
+            print("Actor:{} got {}/{} episodes".format(self.actor_idx, len(self.memory), int(np.ceil(self.memory.memsize / self.num_actor))))
+            if len(self.memory) >= self.memory.memsize / self.num_actor:
+                print("sending memory")
                 self._connect.rpush("experience", cPickle.dumps(self.memory))
                 for id in self.agent_ids:
                     self.memory.replay_buffer[id].clear()
 
             with self._connect.lock("Update"):
-                self._wait_until_present("episode_count")
+                wait_until_present(self._connect, "episode_count")
                 episode_count = cPickle.loads(self._connect.get("episode_count"))
-                episode_count+= + 1
+                print("Actor:{} got episode_count".format(self.actor_idx))
+                episode_count += + 1
                 self._connect.set("episode_count", cPickle.dumps(episode_count))
                 success_count = cPickle.loads(self._connect.get("success_count"))
+                print("Actor:{} got success_count".format(self.actor_idx))
                 if not done:
                     success_count += 1
                 self._connect.set("success_count", cPickle.dumps(success_count))
                 self._connect.set("epsilon", cPickle.dumps(epsilon))
-                self._wait_until_present("epoch")
-                epoch=cPickle.loads(self._connect.get("epoch"))
-                for id in self.agent_ids:
-                    writer.add_scalar(self.id_to_name[id] + ": Reward/train", total_reward[id], epoch)
-                    writer.add_scalar(self.id_to_name[id] + ": Success Rate/train", success_count / episode_count,
-                                      epoch)
-                writer.flush()
+                wait_until_present(self._connect, "epoch")
+                epoch = cPickle.loads(self._connect.get("epoch"))
+                print("Actor:{} got epoch".format(self.actor_idx))
+            self._connect.rpush("reward", cPickle.dumps(total_reward))
 
 
 
-            if epoch % performance_display_interval == 0:
-                print('\n Epoch: [%d] Epsilon : %f \n' % (
-                    epoch, epsilon))
-                for id in self.agent_ids:
-                    print('\n Agent %d, Reward: %f \n' % (id, total_reward[id]))
-
-            if (epoch) % actor_update_freq == 0:
-                if epsilon > final_epsilon:
-                    epsilon *= epsilon_vanish_rate
+            if epoch % actor_update_freq == 0 and prev_epoch != epoch:
                 self._pull_params()
 
-        writer.close()
+            prev_epoch = epoch
 
     def _pull_params(self):
-        self._wait_until_present("params")
+        wait_until_present(self._connect, "params")
         # print("Sync params.")
         with self._connect.lock("Update params"):
             params = self._connect.get("params")
@@ -217,19 +209,7 @@ class Actor:
                 self.model[id].load_state_dict(cPickle.loads(params)[id])
                 self.model[id].to(self.device)
 
-    def _wait_until_present(self, name):
-        # print("Waiting for "+name)
-        while True:
-            if not self._connect.get(name) is None:
-                # print(name+" received")
-                break
-            time.sleep(0.1)
 
-    def _wait_until_all_received(self):
-        while True:
-            if self._connect.llen("received") == self.num_actor:
-                break
-            time.sleep(0.1)
 
 
 if __name__ == "__main__":
@@ -242,9 +222,10 @@ if __name__ == "__main__":
     parser.add_argument('-r', '--redisserver', type=str, default='localhost', help="Redis's server name.")
     parser.add_argument('-d', '--device', type=int, default=0, help="Index of GPU to use")
     parser.add_argument('-s', '--seed', type=int, default=0, help="Seed for randomization")
+    parser.add_argument('-c', '--config', type=str, default='Train.yaml', help="Config file name")
     args = parser.parse_args()
 
-    with open("Config/Train.yaml") as file:
+    with open("Config/"+args.config) as file:
         param = yaml.safe_load(file)
     actor = Actor(
         id_to_name=param["id_to_name"],
@@ -255,8 +236,6 @@ if __name__ == "__main__":
     actor.initialize_model(cnn_out_size=param["cnn_out_size"], lstm_hidden_size=param["lstm_hidden_size"],
                            action_shape=param["action_shape"],
                            action_out_size=param["action_out_size"], atten_size=param["atten_size"])
-    actor.collect_data(final_epsilon=param["final_epsilon"],
-                       epsilon_vanish_rate=param["epsilon_vanish_rate"], max_steps=param["max_steps"],
+    actor.collect_data(max_steps=param["max_steps"],
                        name_tensorboard=param["name_tensorboard"],
-                       actor_update_freq=param["actor_update_freq(epochs)"],
-                       performance_display_interval=param["performance_display_interval(epochs)"])
+                       actor_update_freq=param["actor_update_freq(epochs)"])

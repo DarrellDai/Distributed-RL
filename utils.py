@@ -7,6 +7,7 @@ import re
 from unity_wrappers.envs import MultiUnityWrapper
 from mlagents_envs.environment import UnityEnvironment
 import torch.nn as nn
+import time
 
 
 
@@ -119,3 +120,17 @@ def load_checkpoint(filename, device, dirname='Checkpoint'):
 
     return checkpoint['model_state_dicts'], checkpoint['optimizer_state_dicts'], checkpoint[
         'episode_count'], checkpoint['epsilon'], checkpoint['epoch_count'], checkpoint['success_count']
+
+def wait_until_present(server, name):
+    # print("Waiting for "+name)
+    while True:
+        if not server.get(name) is None:
+            # print(name+" received")
+            break
+        time.sleep(0.1)
+
+def wait_until_all_received(server, name, num):
+    while True:
+        if server.llen(name) == num:
+            break
+        time.sleep(0.1)
