@@ -18,9 +18,9 @@ learning_rate: 0.00025
 gamma: 0.99
 initial_epsilon: 1.0
 final_epsilon: 0.1
-epsilon_vanish_rate: 0.999
-memory_size: 100
+epsilon_vanish_rate: 0.99999
+memory_size: 40
 performance_display_interval(epochs): 5
-checkpoint_save_interval(epochs): 25
-actor_update_freq(epochs): 10
-target_update_freq(epochs): 25
+checkpoint_save_interval(epochs): 15
+actor_update_freq(epochs): 5
+target_update_freq(epochs): 15

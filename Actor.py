@@ -45,6 +45,7 @@ class Actor:
         self._connect = redis.Redis(host=hostname)
         self._connect.delete("experience")
         random.seed(seed)
+        torch.set_num_threads(10)
 
     def initialize_env(self, env_path):
         unity_env = UnityEnvironment(env_path, worker_id=self.actor_idx)
