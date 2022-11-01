@@ -128,6 +128,9 @@ class Human_play:
         self.initialize_server(hostname)
         memory=self.load_checkpoint(checkpoint_name)
         self.connect.rpush("experience", cPickle.dumps(memory))
+        with self.connect.lock("Update"):
+            self.connect.set("episode_count", cPickle.dumps(len(mem)))
+            self.connect.set("success_count", cPickle.dumps(0))
     def load_checkpoint(self, checkpoint_name):
         filepath = os.path.join('Checkpoint', checkpoint_name)
         checkpoint = torch.load(filepath, self.device)
