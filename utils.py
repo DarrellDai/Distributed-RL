@@ -28,9 +28,7 @@ def wrap_model_with_dataparallel(models, device_idx):
         else:
             models[id] = models[id].to(device)
 
-def get_agents_id_to_name(env_path):
-    unity_env = UnityEnvironment(env_path)
-    env = MultiUnityWrapper(unity_env=unity_env, uint8_visual=True, allow_multiple_obs=True)
+def get_agents_id_to_name(env):
     agent_ids = tuple(env.agent_id_to_behaviour_name.keys())
     id_to_name = find_name_of_agents(env.agent_id_to_behaviour_name, agent_ids)
     return id_to_name

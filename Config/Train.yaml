@@ -1,6 +1,5 @@
 checkpoint_to_load: "Checkpoint_Nav_Distributed_RL.pth.tar"
 device_idx: [3,4,5,6,7]
-id_to_name: {1: 'Hider 0'}
 name_tensorboard: "CNN_LSTM_DQN_Nav_Distributed_RL_Hider"
 cnn_out_size: [500]
 atten_size: [15]

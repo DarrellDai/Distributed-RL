@@ -19,14 +19,13 @@ import _pickle as cPickle
 from utils import initialize_model, find_optimal_action, \
     wrap_model_with_dataparallel, \
     find_hidden_cell_out_of_an_action, \
-    combine_out, wait_until_present, wait_until_all_received
+    combine_out, wait_until_present, get_agents_id_to_name
 from Experience_Replay import Memory
 
 
 class Actor:
     def __init__(
             self,
-            id_to_name,
             actor_idx=0,
             num_actor=1,
             device_idx=0,
@@ -35,12 +34,12 @@ class Actor:
             seed=0
 
     ):
-        self.id_to_name = id_to_name
-        self.agent_ids = tuple(id_to_name.keys())
+
+
         self.actor_idx = actor_idx
         self.num_actor = num_actor
         self.device_idx = device_idx
-        self.memory = Memory(memory_size, self.agent_ids)
+        self.memory_size=memory_size
         self.device = torch.device('cuda:' + str(device_idx) if torch.cuda.is_available() else 'cpu')
         self._connect = redis.Redis(host=hostname)
         self._connect.delete("experience")
@@ -50,8 +49,12 @@ class Actor:
     def initialize_env(self, env_path):
         unity_env = UnityEnvironment(env_path, worker_id=self.actor_idx)
         self.env = MultiUnityWrapper(unity_env=unity_env, uint8_visual=True, allow_multiple_obs=True)
+        self.id_to_name = get_agents_id_to_name(self.env)
+        self.agent_ids = tuple(self.id_to_name.keys())
+
 
     def initialize_model(self, cnn_out_size, lstm_hidden_size, action_shape, action_out_size, atten_size):
+        self.memory = Memory(self.memory_size, self.agent_ids)
         self.action_shape = {}
         self.atten_size = {}
         for idx in range(len(self.agent_ids)):
@@ -231,7 +234,6 @@ if __name__ == "__main__":
     with open("Config/"+args.config) as file:
         param = yaml.safe_load(file)
     actor = Actor(
-        id_to_name=param["id_to_name"],
         actor_idx=args.actor_index,
         num_actor=args.num_actors,
         device_idx=args.device, memory_size=param["memory_size"], hostname=args.redisserver, seed=args.seed)
