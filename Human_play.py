@@ -27,8 +27,8 @@ class Human_play:
         self.num_actor=num_actor
         self.device_idx = device_idx
         self.device = torch.device('cuda:' + str(device_idx) if torch.cuda.is_available() else 'cpu')
-    def initialize_env(self, env_path, max_steps, total_episodes):
-        unity_env = UnityEnvironment(env_path)
+    def initialize_env(self, env_path, max_steps, total_episodes, worker_id):
+        unity_env = UnityEnvironment(env_path, worker_id=worker_id)
         self.env = MultiUnityWrapper(unity_env=unity_env, uint8_visual=True, allow_multiple_obs=True)
         self.id_to_name = get_agents_id_to_name(self.env)
         self.agent_ids = tuple(self.id_to_name.keys())
@@ -40,30 +40,30 @@ class Human_play:
         for id in self.agent_ids:
             act[id] = np.zeros(2)
         if keyboard.is_pressed("down"):
-            act[1][0] = -1
+            act[id][0] = -1
         elif keyboard.is_pressed("up"):
-            act[1][0] = 1
+            act[id][0] = 1
         else:
-            act[1][0] = 0
+            act[id][0] = 0
         if keyboard.is_pressed("right"):
-            act[1][1] = 1
+            act[id][1] = 1
         elif keyboard.is_pressed("left"):
-            act[1][1] = -1
+            act[id][1] = -1
         else:
-            act[1][1] = 0
+            act[id][1] = 0
 
         # if keyboard.is_pressed("s"):
-        #     act[0][0] = -1
+        #     act[id][0] = -1
         # elif keyboard.is_pressed("w"):
-        #     act[0][0] = 1
+        #     act[id][0] = 1
         # else:
-        #     act[0][0] = 0
+        #     act[id][0] = 0
         # if keyboard.is_pressed("d"):
-        #     act[0][1] = 1
+        #     act[id][1] = 1
         # elif keyboard.is_pressed("a"):
-        #     act[0][1] = -1
+        #     act[id][1] = -1
         # else:
-        #     act[0][1] = 0
+        #     act[id][1] = 0
         return act
     def play_game(self, start_episode=0, mem=None, real_time_memory_sync=False, hostname='localhost'):
         if real_time_memory_sync:
@@ -95,10 +95,10 @@ class Human_play:
                 prev_obs = obs_dict
             mem.add_episode(local_memory)
             if real_time_memory_sync:
-                self.update(local)
+                self.update()
                 if len(mem) >= mem.memsize / self.num_actor:
                     self.connect.rpush("experience", cPickle.dumps(mem))
-                    for id in agent_ids:
+                    for id in self.agent_ids:
                         mem.replay_buffer[id].clear()
             if exit:
                 break
@@ -154,7 +154,8 @@ class Human_play:
 if __name__=="__main__":
     parser = argparse.ArgumentParser(description='Learner process for distributed reinforcement.')
     parser.add_argument('-m', '--mode', type=str, default='s', help="Runing mode. s:save_mode, l:load_mode, r: real time mode")
-    parser.add_argument('-rc', '--run_config', type=str, default='Train.yaml', help="Running config file name")
+    parser.add_argument('-rc', '--run_config', type=str, default='Human_play.yaml', help="Running config file name")
+    parser.add_argument('-w', '--worker', type=int, default=0, help="Worker id to run the environment")
     args=parser.parse_args()
     with open("Config/"+args.run_config) as file:
         param = yaml.safe_load(file)
@@ -162,11 +163,10 @@ if __name__=="__main__":
     if args.mode=='l':
         human_play.load_mode(checkpoint_name=param["checkpoint_to_load"], hostname=param["hostname"])
     else:
-        human_play.initialize_env(env_path=param["env_path"],max_steps=param["max_steps"],total_episodes=param["total_episodes"])
+        human_play.initialize_env(env_path=param["env_path"],max_steps=param["max_steps"],total_episodes=param["total_episodes"], worker_id=args.worker)
         if args.mode=='s':
             checkpoint_save_name=param["checkpoint_save_name"]
             human_play.save_mode(checkpoint_to_save=param["checkpoint_save_name"], checkpoint_to_load=param["checkpoint_to_load"])
         else:
             human_play.real_time_mode(param["hostname"])
-        human_play.env.close()
         
