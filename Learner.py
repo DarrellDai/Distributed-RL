@@ -12,19 +12,18 @@ import _pickle as cPickle
 import yaml
 import argparse
 
-from utils import initialize_model, wrap_model_with_dataparallel, save_checkpoint, load_checkpoint, wait_until_present, \
-    wait_until_all_received
+from utils import initialize_model, wrap_model_with_dataparallel, save_checkpoint, load_checkpoint, wait_until_present
 from Experience_Replay import Distributed_Memory
 
 
 class Learner:
-    def __init__(self, id_to_name, memsize, num_actor=1, epsilon=1, hostname="localhost", device_idx=[0]):
-        self.id_to_name = id_to_name
+    def __init__(self, memsize, num_actor=1, epsilon=1, hostname="localhost", device_idx=[0]):
         self.num_actor = num_actor
-        self.agent_ids = tuple(id_to_name.keys())
+        self.memory_size=memsize
         self.device_idx = device_idx
         self.epsilon = epsilon
         self._connect = redis.Redis(host=hostname)
+        self._connect.delete("id_to_name")
         self._connect.delete("params")
         self._connect.delete("epsilon")
         self._connect.delete("success_count")
@@ -35,8 +34,7 @@ class Learner:
         self._connect.delete("Update params")
         self._connect.delete("Update Experience")
         self._connect.delete("Update Reward")
-        self._memory = Distributed_Memory(memsize, self.agent_ids, connect=redis.Redis(host=hostname))
-        self._memory.start()
+
         self.device = torch.device('cuda:' + str(device_idx[0]) if torch.cuda.is_available() else 'cpu')
         torch.set_num_threads(10)
 
@@ -56,6 +54,11 @@ class Learner:
         time.sleep(0.01 * mlen)
 
     def initialize_model(self, cnn_out_size, lstm_hidden_size, action_shape, action_out_size, atten_size):
+        wait_until_present(self._connect, "id_to_name")
+        self.id_to_name=cPickle.loads(self._connect.get("id_to_name"))
+        self.agent_ids = tuple(self.id_to_name.keys())
+        self._memory = Distributed_Memory(self.memory_size, self.agent_ids, connect=self._connect)
+        self._memory.start()
         self.main_model = initialize_model(self.agent_ids, cnn_out_size, lstm_hidden_size, action_shape,
                                            action_out_size,
                                            atten_size)
@@ -238,23 +241,26 @@ class Learner:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Learner process for distributed reinforcement.')
     parser.add_argument('-r', '--redisserver', type=str, default='localhost', help="Redis's server name.")
-    parser.add_argument('-c', '--config', type=str, default='Train.yaml', help="Config file name")
+    parser.add_argument('-mc', '--model_config', type=str, default='Model.yaml', help="Model config file name")
+    parser.add_argument('-rc', '--run_config', type=str, default='Train.yaml', help="Running config file name")
     args = parser.parse_args()
-    with open("Config/" + args.config) as file:
-        param = yaml.safe_load(file)
-    learner = Learner(id_to_name=param["id_to_name"], memsize=param["memory_size"], epsilon=param["initial_epsilon"],
-                      hostname=args.redisserver, device_idx=param["device_idx"])
-    learner.initialize_model(cnn_out_size=param["cnn_out_size"], lstm_hidden_size=param["lstm_hidden_size"],
-                             action_shape=param["action_shape"],
-                             action_out_size=param["action_out_size"], atten_size=param["atten_size"])
-    learner.initialize_training(learning_rate=param["learning_rate"], resume=param["resume"],
-                                checkpoint_to_load=param["checkpoint_to_load"])
-    learner.train(batch_size=param["batch_size"], time_step=param["time_step"], gamma=param["gamma"],
-                  learning_rate=param["learning_rate"], name_tensorboard=param["name_tensorboard"],
-                  final_epsilon=param["final_epsilon"],
-                  epsilon_vanish_rate=param["epsilon_vanish_rate"],
-                  total_epochs=param["total_epochs"], actor_update_freq=param["actor_update_freq(epochs)"],
-                  target_update_freq=param["target_update_freq(epochs)"],
-                  performance_display_interval=param["performance_display_interval(epochs)"],
-                  checkpoint_save_interval=param["checkpoint_save_interval(epochs)"],
-                  checkpoint_to_save=param["checkpoint_to_save"])
+    with open("Config/" + args.model_config) as file:
+        model_param = yaml.safe_load(file)
+    with open("Config/" + args.run_config) as file:
+        run_param = yaml.safe_load(file)
+    learner = Learner(memsize=run_param["memory_size"], epsilon=run_param["initial_epsilon"],
+                      hostname=args.redisserver, device_idx=run_param["device_idx"])
+    learner.initialize_model(cnn_out_size=model_param["cnn_out_size"], lstm_hidden_size=model_param["lstm_hidden_size"],
+                             action_shape=model_param["action_shape"],
+                             action_out_size=model_param["action_out_size"], atten_size=model_param["atten_size"])
+    learner.initialize_training(learning_rate=run_param["learning_rate"], resume=run_param["resume"],
+                                checkpoint_to_load=run_param["checkpoint_to_load"])
+    learner.train(batch_size=run_param["batch_size"], time_step=run_param["time_step"], gamma=run_param["gamma"],
+                  learning_rate=run_param["learning_rate"], name_tensorboard=run_param["name_tensorboard"],
+                  final_epsilon=run_param["final_epsilon"],
+                  epsilon_vanish_rate=run_param["epsilon_vanish_rate"],
+                  total_epochs=run_param["total_epochs"], actor_update_freq=run_param["actor_update_freq(epochs)"],
+                  target_update_freq=run_param["target_update_freq(epochs)"],
+                  performance_display_interval=run_param["performance_display_interval(epochs)"],
+                  checkpoint_save_interval=run_param["checkpoint_save_interval(epochs)"],
+                  checkpoint_to_save=run_param["checkpoint_to_save"])

@@ -1,7 +1,9 @@
 #!/bin/bash
+#EXIT is used to kill all child process when this script exit(finish all commands).
+# Without EXIT, when it exits, the child processes will still be on, but the process of this script will disappear
+trap 'kill $(jobs -p)' SIGINT SIGTERM EXIT
 
-trap 'kill $(jobs -p)' SIGINT SIGTERM EXIT 
-config=${2:-"Config/all.conf"} 
+config=${2:-"Config/Self_Play.conf"}
 source $config 
 if [ -z "$redis_server" ]; then
     redis_server=$3 
@@ -11,18 +13,15 @@ echo "redis server:" $redis_server
 
 pids="" 
 if $human_play; then
-    if $leaner; then
-    python Learner.py -c $Train_human_play_config &
+    python Learner.py -rc $Train_human_play_config &
     pids="$pids $!"
-	fi
 	python Human_play.py -m l &
 	pids="$pids $!"
 fi
 wait -f $pids
-
 pids=""
 if $leaner; then
-	python Learner.py -c $Train_config &
+	python Learner.py -rc $Train_config &
 	pids="$pids $!"
 fi
 
@@ -33,6 +32,5 @@ if $actor; then
     pids="$pids $!"
     done
 fi
-
+# Exit the this script when there's a child process is done, so all child process will be killed
 wait -n $pids
-trap 'kill $pids' SIGINT SIGTERM EXIT

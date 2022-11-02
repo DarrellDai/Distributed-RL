@@ -1,10 +1,8 @@
 from Pipeline import Pipeline
-from utils import base_input_parameters
 import yaml
 
 with open("config/Test_Nav.yaml") as file:
     param = yaml.safe_load(file)
-args = base_input_parameters().parse_args()
 pipeline = Pipeline()
 pipeline.initialize_env(env_path=param["env_path"])
 pipeline.initialize_model(cnn_out_size=param["cnn_out_size"], lstm_hidden_size=param["lstm_hidden_size"],

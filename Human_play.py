@@ -15,24 +15,23 @@ from unity_wrappers.envs import MultiUnityWrapper
 from mlagents_envs.environment import UnityEnvironment
 
 import _pickle as cPickle
-from utils import save_checkpoint
+from utils import save_checkpoint, get_agents_id_to_name
 from Experience_Replay import Memory
 
 class Human_play:
     def __init__(
             self,
-            id_to_name,
             num_actor=1,
             device_idx=0
     ):
-        self.id_to_name = id_to_name
-        self.agent_ids = tuple(id_to_name.keys())
         self.num_actor=num_actor
         self.device_idx = device_idx
         self.device = torch.device('cuda:' + str(device_idx) if torch.cuda.is_available() else 'cpu')
     def initialize_env(self, env_path, max_steps, total_episodes):
         unity_env = UnityEnvironment(env_path)
         self.env = MultiUnityWrapper(unity_env=unity_env, uint8_visual=True, allow_multiple_obs=True)
+        self.id_to_name = get_agents_id_to_name(self.env)
+        self.agent_ids = tuple(self.id_to_name.keys())
         self.max_steps=max_steps
         self.total_episodes=total_episodes
     def controller(self):
@@ -129,7 +128,7 @@ class Human_play:
         memory=self.load_checkpoint(checkpoint_name)
         self.connect.rpush("experience", cPickle.dumps(memory))
         with self.connect.lock("Update"):
-            self.connect.set("episode_count", cPickle.dumps(len(mem)))
+            self.connect.set("episode_count", cPickle.dumps(len(memory)))
             self.connect.set("success_count", cPickle.dumps(0))
     def load_checkpoint(self, checkpoint_name):
         filepath = os.path.join('Checkpoint', checkpoint_name)
@@ -155,24 +154,19 @@ class Human_play:
 if __name__=="__main__":
     parser = argparse.ArgumentParser(description='Learner process for distributed reinforcement.')
     parser.add_argument('-m', '--mode', type=str, default='s', help="Runing mode. s:save_mode, l:load_mode, r: real time mode")
+    parser.add_argument('-rc', '--run_config', type=str, default='Train.yaml', help="Running config file name")
     args=parser.parse_args()
-    with open("Config/Human_Play.yaml") as file:
+    with open("Config/"+args.run_config) as file:
         param = yaml.safe_load(file)
-    env_path=param["env_path"]
-    total_episodes=param["total_episodes"]
-    max_steps = param["max_steps"]
-    device_idx = param["device_idx"]
-    id_to_name=param["id_to_name"]
-    hostname = param["hostname"]
-    checkpoint_to_load = param["checkpoint_to_load"]
-    human_play=Human_play(id_to_name=id_to_name, device_idx=device_idx)
+    human_play=Human_play(device_idx=param["device_idx"])
     if args.mode=='l':
-        human_play.load_mode(checkpoint_name=checkpoint_to_load, hostname=hostname)
+        human_play.load_mode(checkpoint_name=param["checkpoint_to_load"], hostname=param["hostname"])
     else:
-        human_play.initialize_env(env_path=env_path,max_steps=max_steps,total_episodes=total_episodes)
+        human_play.initialize_env(env_path=param["env_path"],max_steps=param["max_steps"],total_episodes=param["total_episodes"])
         if args.mode=='s':
             checkpoint_save_name=param["checkpoint_save_name"]
-            human_play.save_mode(checkpoint_to_save=checkpoint_save_name, checkpoint_to_load=checkpoint_to_load)
+            human_play.save_mode(checkpoint_to_save=param["checkpoint_save_name"], checkpoint_to_load=param["checkpoint_to_load"])
         else:
-            human_play.real_time_mode(hostname)
+            human_play.real_time_mode(param["hostname"])
+        human_play.env.close()
         

@@ -19,28 +19,27 @@ import _pickle as cPickle
 from utils import initialize_model, find_optimal_action, \
     wrap_model_with_dataparallel, \
     find_hidden_cell_out_of_an_action, \
-    combine_out, wait_until_present, wait_until_all_received
+    combine_out, wait_until_present, get_agents_id_to_name
 from Experience_Replay import Memory
 
 
 class Actor:
     def __init__(
             self,
-            id_to_name,
             actor_idx=0,
             num_actor=1,
             device_idx=0,
-            memory_size=100,
+            memsize=100,
             hostname="localhost",
             seed=0
 
     ):
-        self.id_to_name = id_to_name
-        self.agent_ids = tuple(id_to_name.keys())
+
+
         self.actor_idx = actor_idx
         self.num_actor = num_actor
         self.device_idx = device_idx
-        self.memory = Memory(memory_size, self.agent_ids)
+        self.memory_size=memsize
         self.device = torch.device('cuda:' + str(device_idx) if torch.cuda.is_available() else 'cpu')
         self._connect = redis.Redis(host=hostname)
         random.seed(seed)
@@ -49,8 +48,14 @@ class Actor:
     def initialize_env(self, env_path):
         unity_env = UnityEnvironment(env_path, worker_id=self.actor_idx)
         self.env = MultiUnityWrapper(unity_env=unity_env, uint8_visual=True, allow_multiple_obs=True)
+        self.id_to_name = get_agents_id_to_name(self.env)
+        self.agent_ids = tuple(self.id_to_name.keys())
+        if self.actor_idx==0:
+            self._connect.set("id_to_name", cPickle.dumps(self.id_to_name))
+
 
     def initialize_model(self, cnn_out_size, lstm_hidden_size, action_shape, action_out_size, atten_size):
+        self.memory = Memory(self.memory_size, self.agent_ids)
         self.action_shape = {}
         self.atten_size = {}
         for idx in range(len(self.agent_ids)):
@@ -224,20 +229,23 @@ if __name__ == "__main__":
     parser.add_argument('-r', '--redisserver', type=str, default='localhost', help="Redis's server name.")
     parser.add_argument('-d', '--device', type=int, default=0, help="Index of GPU to use")
     parser.add_argument('-s', '--seed', type=int, default=0, help="Seed for randomization")
-    parser.add_argument('-c', '--config', type=str, default='Train.yaml', help="Config file name")
+    parser.add_argument('-mc', '--model_config', type=str, default='Model.yaml', help="Model config file name")
+    parser.add_argument('-rc', '--run_config', type=str, default='Train.yaml', help="Running config file name")
     args = parser.parse_args()
 
-    with open("Config/"+args.config) as file:
-        param = yaml.safe_load(file)
+    with open("Config/"+args.model_config) as file:
+        model_param = yaml.safe_load(file)
+    with open("Config/"+args.run_config) as file:
+        run_param = yaml.safe_load(file)
     actor = Actor(
-        id_to_name=param["id_to_name"],
         actor_idx=args.actor_index,
         num_actor=args.num_actors,
-        device_idx=args.device, memory_size=param["memory_size"], hostname=args.redisserver, seed=args.seed)
-    actor.initialize_env(param["env_path"])
-    actor.initialize_model(cnn_out_size=param["cnn_out_size"], lstm_hidden_size=param["lstm_hidden_size"],
-                           action_shape=param["action_shape"],
-                           action_out_size=param["action_out_size"], atten_size=param["atten_size"])
-    actor.collect_data(max_steps=param["max_steps"],
-                       name_tensorboard=param["name_tensorboard"],
-                       actor_update_freq=param["actor_update_freq(epochs)"])
+        device_idx=args.device, memsize=run_param["memory_size"], hostname=args.redisserver, seed=args.seed)
+    actor.initialize_env(run_param["env_path"])
+    actor.initialize_model(cnn_out_size=model_param["cnn_out_size"], lstm_hidden_size=model_param["lstm_hidden_size"],
+                           action_shape=model_param["action_shape"],
+                           action_out_size=model_param["action_out_size"], atten_size=model_param["atten_size"])
+    actor.collect_data(max_steps=run_param["max_steps"],
+                       name_tensorboard=run_param["name_tensorboard"],
+                       actor_update_freq=run_param["actor_update_freq(epochs)"])
+    actor.env.close()
