@@ -28,7 +28,7 @@ fi
 if $actor; then
     for i in `seq $num_actors`
     do
-    python Actor.py -n $num_actors -i $(($i-1)) -c $Train_config -r $redis_server -d $((($i-1)+$first_device)) -s $(($i-1)) &
+    python Actor.py -n $num_actors -i $(($i-1)) -rc $Train_config -r $redis_server -d $((($i-1)+$first_device)) -s $(($i-1)) &
     pids="$pids $!"
     done
 fi
