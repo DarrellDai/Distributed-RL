@@ -242,3 +242,4 @@ if __name__ == "__main__":
     actor.collect_data(max_steps=param["max_steps"],
                        name_tensorboard=param["name_tensorboard"],
                        actor_update_freq=param["actor_update_freq(epochs)"])
+    actor.env.close()

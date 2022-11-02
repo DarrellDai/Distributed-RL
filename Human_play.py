@@ -129,7 +129,7 @@ class Human_play:
         memory=self.load_checkpoint(checkpoint_name)
         self.connect.rpush("experience", cPickle.dumps(memory))
         with self.connect.lock("Update"):
-            self.connect.set("episode_count", cPickle.dumps(len(mem)))
+            self.connect.set("episode_count", cPickle.dumps(len(memory)))
             self.connect.set("success_count", cPickle.dumps(0))
     def load_checkpoint(self, checkpoint_name):
         filepath = os.path.join('Checkpoint', checkpoint_name)
@@ -175,4 +175,5 @@ if __name__=="__main__":
             human_play.save_mode(checkpoint_to_save=checkpoint_save_name, checkpoint_to_load=checkpoint_to_load)
         else:
             human_play.real_time_mode(hostname)
+        human_play.env.close()
         
