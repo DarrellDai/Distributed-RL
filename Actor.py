@@ -43,7 +43,6 @@ class Actor:
         self.memory = Memory(memory_size, self.agent_ids)
         self.device = torch.device('cuda:' + str(device_idx) if torch.cuda.is_available() else 'cpu')
         self._connect = redis.Redis(host=hostname)
-        self._connect.delete("experience")
         random.seed(seed)
         torch.set_num_threads(10)
 

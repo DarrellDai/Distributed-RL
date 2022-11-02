@@ -1,13 +1,13 @@
 checkpoint_to_load: "Checkpoint_Nav_Human_Play.pth.tar"
 device_idx: [3,4,5,6,7]
-id_to_name: {1: 'Hider 0'}
+id_to_name: {3: 'Hider 0'}
 name_tensorboard: "CNN_LSTM_DQN_Nav_RL_Hider"
 cnn_out_size: [500]
 atten_size: [2]
 lstm_hidden_size: [512]
 action_shape: [[3,3]]
 action_out_size: [32]
-env_path: '../Env_Linux_Nav_3_Seekers/Hide and Seek'
+env_path: '../Env_Linux_Nav_3_Seekers_Big_Rocks_No_Waiting_Time/Hide and Seek'
 total_episodes_each_actor: 200
 total_epochs: 2000
 max_steps: 60
