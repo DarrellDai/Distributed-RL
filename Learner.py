@@ -131,10 +131,10 @@ class Learner:
                 else:
                     loss[id] = 0
                 # todo: success_count should be associated to player type
-                writer.add_scalar(self.id_to_name[id] + ": Success Rate/train",
+                writer.add_scalar(self.id_to_name[id] + ": Success Rate vs Epoch",
                                   success_count / episode_count,
                                   epoch)
-                writer.add_scalar(self.id_to_name[id] + ": Loss/train", loss[id], epoch)
+                writer.add_scalar(self.id_to_name[id] + ": Loss vs Epoch", loss[id], epoch)
             writer.flush()
             if (epoch + 1) % target_update_freq == 0:
                 for id in self.agent_ids:

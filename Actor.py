@@ -199,7 +199,7 @@ class Actor:
                 epoch = cPickle.loads(self._connect.get("epoch"))
                 # print("Actor {} got epoch".format(self.actor_idx))
                 for id in self.agent_ids:
-                    writer.add_scalar(self.id_to_name[id] + ": Reward/train", total_reward[id], episode_count)
+                    writer.add_scalar(self.id_to_name[id] + ": Reward vs Episode", total_reward[id], episode_count)
                 writer.flush()
 
 
