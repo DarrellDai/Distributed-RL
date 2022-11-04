@@ -6,7 +6,7 @@ memory_size: 100
 device_idx: [3,4,5,6,7]
 resume: False
 total_epochs: 20000
-max_steps: 150
+max_steps: 100
 batch_size: 25
 time_step: 20
 learning_rate: 0.00025
