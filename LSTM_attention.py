@@ -7,7 +7,6 @@ class LSTM(nn.Module):
 
     def __init__(self, input_size, hidden_size, atten_size):
         super(LSTM, self).__init__()
-        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.input_size = input_size
         self.hidden_size = hidden_size
         self.atten_size = atten_size
@@ -26,7 +25,7 @@ class LSTM(nn.Module):
 
     # Input must be tensor
     def forward(self, x, hidden_state, cell_state, out):
-        self.device=x.get_device()
+        device=x.get_device()
         hidden_state = hidden_state.reshape((hidden_state.shape[1], hidden_state.shape[0]) + hidden_state.shape[2:])
         cell_state = cell_state.reshape((cell_state.shape[1], cell_state.shape[0]) + cell_state.shape[2:])
         x = x.reshape(x.shape[0], -1, self.input_size).float()
@@ -36,7 +35,7 @@ class LSTM(nn.Module):
                 score = torch.zeros((out.shape[0], 1, out.shape[1]), requires_grad=False).float()
                 for t in range(out.shape[1]):
                     score[:, :, t] = self.atten_layer(torch.concat((out[:, t, :], hidden_state[0]), 1))
-                weight = nn.Softmax(1)(score).to(self.device)
+                weight = nn.Softmax(1)(score).to(device)
                 atten = torch.bmm(weight, out)
                 x_new = torch.concat((x[:, T:T + 1, :], atten), 2)
             else:
@@ -78,7 +77,7 @@ class LSTM(nn.Module):
     #     out=lstm_out[0]
     #     return out, (hidden_state, cell_state)
     def init_hidden_states_and_outputs(self, bsize):
-        h = torch.zeros(bsize, 1, self.hidden_size).float().to(self.device)
-        c = torch.zeros(bsize, 1, self.hidden_size).float().to(self.device)
-        o = torch.zeros(bsize, 1, self.hidden_size).float().to(self.device)
+        h = torch.zeros(bsize, 1, self.hidden_size).float()
+        c = torch.zeros(bsize, 1, self.hidden_size).float()
+        o = torch.zeros(bsize, 1, self.hidden_size).float()
         return h, c, o
