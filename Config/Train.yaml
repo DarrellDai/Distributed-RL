@@ -2,7 +2,7 @@ env_path: '../Env_Linux_Nav_3_Seekers_Big_Rocks_No_Waiting_Time/Hide and Seek'
 checkpoint_to_load: "Checkpoint_Nav_Distributed_RL.pth.tar"
 checkpoint_to_save: "Checkpoint_Nav_Distributed_RL.pth.tar"
 name_tensorboard: "CNN_LSTM_DQN_Nav_Distributed_RL_Hider"
-memory_size: 40
+memory_size: 100
 device_idx: [3,4,5,6,7]
 resume: False
 total_epochs: 20000
