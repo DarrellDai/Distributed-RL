@@ -1,8 +1,7 @@
-env_path: 'C:/Unity Projects/Hide and Seek/Environments/2.0/Env_Linux_Nav_3_Seekers_Big_Rocks_No_Waiting_Time/Hide and Seek'
-checkpoint_to_load: "Human_play_Nav_Big_Rocks_No_Waiting_Time_Darrell.pth.tar"
+env_path: 'C:/Unity Projects/Hide and Seek/Environments/2.0/Env_Nav_3_Seekers_Human_Player_Big_Rocks_No_Waiting_Time/Hide and Seek'
+checkpoint_to_load:
 checkpoint_save_name: "Human_play_Nav"
-id_to_name: {1: 'Hider 0'}
 total_episodes: 100
-max_steps: 300
+max_steps: 150
 device_idx: 0
 hostname: 'localhost'
