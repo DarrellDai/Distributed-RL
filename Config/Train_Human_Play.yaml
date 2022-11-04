@@ -1,13 +1,13 @@
 env_path: '../Env_Linux_Nav_3_Seekers_Big_Rocks_No_Waiting_Time/Hide and Seek'
-checkpoint_to_load: "Human_play_Nav_Big_Rocks_No_Waiting_Time_Darrell.pth.tar"
+checkpoint_to_load: "Checkpoint_Nav_Distributed_RL.pth.tar"
 checkpoint_to_save: "Checkpoint_Nav_Distributed_RL.pth.tar"
 name_tensorboard: "CNN_LSTM_DQN_Nav_Distributed_RL_Hider"
 memory_size: 130
-device_idx: [4,5,6,7]
-resume: True
-total_epochs: 20000
+device_idx: [3,4,5,6,7]
+resume: false
+total_epochs: 2000
 max_steps: 150
-batch_size: 25
+batch_size: 30
 time_step: 20
 learning_rate: 0.00025
 gamma: 0.99

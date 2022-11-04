@@ -3,10 +3,10 @@
 # Without EXIT, when it exits, the child processes will still be on, but the process of this script will disappear
 trap 'kill $(jobs -p)' SIGINT SIGTERM EXIT
 
-config=${2:-"Config/Self_Play.conf"}
+config=${1:-"Config/Self_Play.conf"}
 source $config 
 if [ -z "$redis_server" ]; then
-    redis_server=$3 
+    redis_server=$2
 fi
 
 echo "redis server:" $redis_server 
