@@ -34,6 +34,7 @@ class Human_play:
         self.agent_ids = tuple(self.id_to_name.keys())
         self.max_steps=max_steps
         self.total_episodes=total_episodes
+        self._connect.set("id_to_name", cPickle.dumps(self.id_to_name))
     def controller(self):
         act = {}
         # {0: agent 0's action, 1: ...]
@@ -95,10 +96,10 @@ class Human_play:
                 prev_obs = obs_dict
             mem.add_episode(local_memory)
             if real_time_memory_sync:
-                self.update(local)
+                self.update()
                 if len(mem) >= mem.memsize / self.num_actor:
                     self.connect.rpush("experience", cPickle.dumps(mem))
-                    for id in agent_ids:
+                    for id in self.agent_ids:
                         mem.replay_buffer[id].clear()
             if exit:
                 break
@@ -125,7 +126,8 @@ class Human_play:
 
     def load_mode(self, checkpoint_name, hostname='localhost'):
         self.initialize_server(hostname)
-        memory=self.load_checkpoint(checkpoint_name)
+        memory,self.id_to_name=self.load_checkpoint(checkpoint_name)
+        self.connect.set("id_to_name", cPickle.dumps(self.id_to_name))
         self.connect.rpush("experience", cPickle.dumps(memory))
         with self.connect.lock("Update"):
             self.connect.set("episode_count", cPickle.dumps(len(memory)))
@@ -134,7 +136,8 @@ class Human_play:
         filepath = os.path.join('Checkpoint', checkpoint_name)
         checkpoint = torch.load(filepath, self.device)
         memory = checkpoint["memory"]
-        return memory
+        id_to_name = checkpoint["id_to_name"]
+        return memory, id_to_name
 
 
     def update(self):
@@ -154,7 +157,7 @@ class Human_play:
 if __name__=="__main__":
     parser = argparse.ArgumentParser(description='Learner process for distributed reinforcement.')
     parser.add_argument('-m', '--mode', type=str, default='s', help="Runing mode. s:save_mode, l:load_mode, r: real time mode")
-    parser.add_argument('-rc', '--run_config', type=str, default='Train.yaml', help="Running config file name")
+    parser.add_argument('-rc', '--run_config', type=str, default='Human_Play.yaml', help="Running config file name")
     args=parser.parse_args()
     with open("Config/"+args.run_config) as file:
         param = yaml.safe_load(file)

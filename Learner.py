@@ -55,6 +55,7 @@ class Learner:
 
     def initialize_model(self, cnn_out_size, lstm_hidden_size, action_shape, action_out_size, atten_size):
         wait_until_present(self._connect, "id_to_name")
+        print("Got id_to_name")
         self.id_to_name=cPickle.loads(self._connect.get("id_to_name"))
         self.agent_ids = tuple(self.id_to_name.keys())
         self._memory = Distributed_Memory(self.memory_size, self.agent_ids, connect=self._connect)
@@ -131,7 +132,8 @@ class Learner:
                 else:
                     loss[id] = 0
                 # todo: success_count should be associated to player type
-                writer.add_scalar(self.id_to_name[id] + ": Success Rate vs Epoch",
+                if episode_count!=0:
+                    writer.add_scalar(self.id_to_name[id] + ": Success Rate vs Epoch",
                                   success_count / episode_count,
                                   epoch)
                 writer.add_scalar(self.id_to_name[id] + ": Loss vs Epoch", loss[id], epoch)
