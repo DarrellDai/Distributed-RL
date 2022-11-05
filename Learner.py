@@ -4,6 +4,7 @@ import torch
 from torch.utils.tensorboard import SummaryWriter
 
 import redis
+from mpi4py import MPI
 import os
 import time
 from copy import deepcopy
@@ -12,7 +13,7 @@ import _pickle as cPickle
 import yaml
 import argparse
 
-from utils import initialize_model, wrap_model_with_dataparallel, save_checkpoint, load_checkpoint, wait_until_present
+from utils import initialize_model, save_checkpoint, load_checkpoint, wait_until_present, sync_networks, sync_grads
 from Experience_Replay import Distributed_Memory
 
 
@@ -22,18 +23,19 @@ class Learner:
         self.memory_size=memsize
         self.device_idx = device_idx
         self.epsilon = epsilon
-        self._connect = redis.Redis(host=hostname)
-        self._connect.delete("id_to_name")
-        self._connect.delete("params")
-        self._connect.delete("epsilon")
-        self._connect.delete("success_count")
-        self._connect.delete("episode_count")
-        self._connect.delete("epoch")
-        self._connect.delete("experience")
-        self._connect.delete("Update")
-        self._connect.delete("Update params")
-        self._connect.delete("Update Experience")
-        self._connect.delete("Update Reward")
+        if MPI.COMM_WORLD.Get_rank() == 0:
+            self._connect = redis.Redis(host=hostname)
+            self._connect.delete("id_to_name")
+            self._connect.delete("params")
+            self._connect.delete("epsilon")
+            self._connect.delete("success_count")
+            self._connect.delete("episode_count")
+            self._connect.delete("epoch")
+            self._connect.delete("experience")
+            self._connect.delete("Update")
+            self._connect.delete("Update params")
+            self._connect.delete("Update Experience")
+        self.comm = MPI.COMM_WORLD
 
         self.device = torch.device('cuda:' + str(device_idx[0]) if torch.cuda.is_available() else 'cpu')
         torch.set_num_threads(10)
@@ -54,18 +56,20 @@ class Learner:
         time.sleep(0.01 * mlen)
 
     def initialize_model(self, cnn_out_size, lstm_hidden_size, action_shape, action_out_size, atten_size):
-        wait_until_present(self._connect, "id_to_name")
-        print("Got id_to_name")
-        self.id_to_name=cPickle.loads(self._connect.get("id_to_name"))
-        self.agent_ids = tuple(self.id_to_name.keys())
-        self._memory = Distributed_Memory(self.memory_size, self.agent_ids, connect=self._connect)
-        self._memory.start()
+        if MPI.COMM_WORLD.Get_rank() == 0:
+            wait_until_present(self._connect, "id_to_name")
+            print("Got id_to_name")
+            self.id_to_name=cPickle.loads(self._connect.get("id_to_name"))
+            self.agent_ids = tuple(self.id_to_name.keys())
+            self._memory = Distributed_Memory(self.memory_size, self.agent_ids, connect=self._connect)
+            self._memory.start()
+        self.comm.Bcast(self.id_to_name)
+        self.comm.Bcast(self.agent_ids)
+
         self.main_model = initialize_model(self.agent_ids, cnn_out_size, lstm_hidden_size, action_shape,
                                            action_out_size,
                                            atten_size)
 
-        wrap_model_with_dataparallel(self.main_model, self.device_idx)
-        self.target_model = deepcopy(self.main_model)
 
     def get_model_state_dict(self):
         model_state_dict = {}
@@ -79,24 +83,26 @@ class Learner:
         for id in self.agent_ids:
             self.optimizer[id] = torch.optim.Adam(self.main_model[id].parameters(), lr=learning_rate)
         if resume:
-            model_state_dicts, optimizer_state_dicts, episode_count, self.epsilon, self.initial_epoch_count, success_count = load_checkpoint(
-                checkpoint_to_load, self.device)
-            # print("episode_count")
-            self._connect.set("episode_count", cPickle.dumps(episode_count))
-            # print("Sending epsilon")
-            self._connect.set("epsilon", cPickle.dumps(self.epsilon))
-            self._connect.set("success_count", cPickle.dumps(success_count))
-            self._connect.set("epoch", cPickle.dumps(self.initial_epoch_count))
+            if MPI.COMM_WORLD.Get_rank() == 0:
+                model_state_dicts, optimizer_state_dicts, episode_count, self.epsilon, self.initial_epoch_count, success_count = load_checkpoint(
+                    checkpoint_to_load, self.device)
+                # print("episode_count")
+                self._connect.set("episode_count", cPickle.dumps(episode_count))
+                # print("Sending epsilon")
+                self._connect.set("epsilon", cPickle.dumps(self.epsilon))
+                self._connect.set("success_count", cPickle.dumps(success_count))
+                self._connect.set("epoch", cPickle.dumps(self.initial_epoch_count))
+            self.comm.Bcast(self.epsilon)
             for id in self.agent_ids:
                 self.main_model[id].load_state_dict(model_state_dicts[id])
                 self.optimizer[id].load_state_dict(optimizer_state_dicts[id])
-            self.target_model = deepcopy(self.main_model)
         else:
             self.initial_epoch_count = 0
             self._connect.set("episode_count", cPickle.dumps(0))
             self._connect.set("epsilon", cPickle.dumps(1))
             self._connect.set("success_count", cPickle.dumps(0))
             self._connect.set("epoch", cPickle.dumps(0))
+        self.target_model = deepcopy(self.main_model)
         self._connect.set("params", cPickle.dumps(self.get_model_state_dict()))
 
     def train(self, batch_size, time_step, gamma, learning_rate, final_epsilon, epsilon_vanish_rate, name_tensorboard,
