@@ -22,14 +22,15 @@ class Memory():
             self.replay_buffer[id].append(episodes[id])
         self.check_dimension()
 
-    def get_batch(self, bsize, time_step, agent_id):
+    #Todo: Change to accept episodes with all length, so some short episode can also be learned
+    def get_batch(self, bsize, num_batch, time_step, agent_id):
         self.check_dimension()
         batches = []
         memory_long_enough = []
         for episode in self.replay_buffer[agent_id]:
             if len(episode) >= time_step:
                 memory_long_enough.append(episode)
-        for _ in range(int(np.ceil(len(memory_long_enough) / bsize))):
+        for _ in range(min(int(np.ceil(len(memory_long_enough) / bsize)),num_batch)):
             batches.append([])
         sampled_idx = random.sample(range(len(memory_long_enough)), len(memory_long_enough))
         order = 0
@@ -80,9 +81,9 @@ class Distributed_Memory(threading.Thread):
                                 self._memory.add_episode(episode)
             time.sleep(0.01)
 
-    def get_batch(self, bsize, time_step, agent_id):
+    def get_batch(self, bsize, num_batch, time_step, agent_id):
         with self._lock:
-            return self._memory.get_batch(bsize, time_step, agent_id)
+            return self._memory.get_batch(bsize, num_batch, time_step, agent_id)
 
     def __len__(self):
         return len(self._memory)

@@ -165,7 +165,7 @@ class Learner:
 
     def learn(self, batch_size, time_step, gamma, loss_stat):
         for id in self.agent_ids:
-            batches = self._memory.get_batch(bsize=batch_size, time_step=time_step, agent_id=id)
+            batches = self._memory.get_batch(bsize=batch_size, num_batch=1, time_step=time_step, agent_id=id)
             for batch in batches:
                 hidden_batch, cell_batch, out_batch = self.main_model[id].module.lstm.init_hidden_states_and_outputs(
                     bsize=len(batch))
