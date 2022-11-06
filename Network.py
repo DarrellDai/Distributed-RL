@@ -52,7 +52,7 @@ class Network(nn.Module):
     '''
 
     def forward(self, obs, act, hidden_state, cell_state, lstm_out):
-        device=obs.get_device()
+        device = obs.device
         bsize = obs.shape[0]
         obs = obs.float()
         act = act.float()
@@ -87,10 +87,12 @@ class Network(nn.Module):
             out_per_action = torch.zeros((bsize, 1) + self.action_shape + hidden_state.shape[-1:]).float().to(device)
             # hidden_state_per_action: Hidden states of LSTM for all possible actions
             # shape: (1 , bsize, action_shape[0], action_shape[1], ..., lstm_hidden_size)
-            hidden_state_per_action = torch.zeros((bsize, 1) + self.action_shape + hidden_state.shape[-1:]).float().to(device)
+            hidden_state_per_action = torch.zeros((bsize, 1) + self.action_shape + hidden_state.shape[-1:]).float().to(
+                device)
             # cell_state_per_action: Cell states of LSTM for all possible action
             # shape: (1 , bsize, action_shape[0], action_shape[1], ..., lstm_hidden_size)
-            cell_state_per_action = torch.zeros((bsize, 1) + self.action_shape + cell_state.shape[-1:]).float().to(device)
+            cell_state_per_action = torch.zeros((bsize, 1) + self.action_shape + cell_state.shape[-1:]).float().to(
+                device)
             for idx, _ in np.ndenumerate(action_matrix):
                 proposed_acts = torch.tensor(idx).repeat(bsize, 1, 1).float().to(device)
                 proposed_act_out = self.actnet(proposed_acts)
