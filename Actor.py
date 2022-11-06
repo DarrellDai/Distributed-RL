@@ -43,7 +43,7 @@ class Actor:
         self.device = torch.device('cuda:' + str(device_idx) if torch.cuda.is_available() else 'cpu')
         self._connect = redis.Redis(host=hostname)
         random.seed(seed)
-        torch.set_num_threads(10)
+        torch.set_num_threads(1)
 
     def initialize_env(self, env_path):
         unity_env = UnityEnvironment(env_path, worker_id=self.actor_idx)
@@ -136,7 +136,7 @@ class Actor:
                 local_memory[id] = []
                 alive[id] = True
                 hidden_state[id], cell_state[id], lstm_out[id] = self.model[
-                    id].module.lstm.init_hidden_states_and_outputs(
+                    id].lstm.init_hidden_states_and_outputs(
                     bsize=1)
             done = False
             while step_count < max_steps and not done:

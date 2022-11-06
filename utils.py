@@ -18,6 +18,7 @@ def initialize_model(agent_ids, cnn_out_size, lstm_hidden_size, action_shape, ac
                                              action_out_size=action_out_size[idx])
     return main_model
 
+
 def wrap_model_with_dataparallel(models, device_idx):
     device = torch.device('cuda:' + str(device_idx[0]) if torch.cuda.is_available() else 'cpu')
     for id in models:
@@ -26,10 +27,12 @@ def wrap_model_with_dataparallel(models, device_idx):
         else:
             models[id] = models[id].to(device)
 
+
 def get_agents_id_to_name(env):
     agent_ids = tuple(env.agent_id_to_behaviour_name.keys())
     id_to_name = find_name_of_agents(env.agent_id_to_behaviour_name, agent_ids)
     return id_to_name
+
 
 def find_name_of_agents(agent_id_to_behaviour_name, agent_ids):
     agent_id_to_name = {}
@@ -53,7 +56,7 @@ def find_optimal_action(dqn_out):
     for batch in range(len(dqn_out_clone)):
         index = np.unravel_index(dqn_out_clone[batch].argmax(), dqn_out_clone[batch].shape)
         act[batch, 0] = np.array(index)
-    act-=1
+    act -= 1
     return act
 
 
@@ -117,6 +120,7 @@ def load_checkpoint(filename, device, dirname='Checkpoint'):
     return checkpoint['model_state_dicts'], checkpoint['optimizer_state_dicts'], checkpoint[
         'episode_count'], checkpoint['epsilon'], checkpoint['epoch_count'], checkpoint['success_count']
 
+
 def wait_until_present(server, name):
     # print("Waiting for "+name)
     while True:
@@ -125,48 +129,46 @@ def wait_until_present(server, name):
             break
         time.sleep(0.1)
 
+
 def wait_until_all_received(server, name, num):
     while True:
         if server.llen(name) == num:
             break
         time.sleep(0.1)
 
-# sync_networks across the different cores
-def sync_networks(network):
-    """
-    netowrk is the network you want to sync
-
-    """
-    comm = MPI.COMM_WORLD
-    flat_params = _get_flat_params_or_grads(network, mode='params')
-    comm.Bcast(flat_params, root=0)
-    # set the flat params back to the network
-    _set_flat_params_or_grads(network, flat_params, mode='params')
 
 def sync_grads(network):
-    flat_grads = _get_flat_params_or_grads(network, mode='grads')
-    comm = MPI.COMM_WORLD
+    flat_grads = _get_flat_grads(network)
     global_grads = np.zeros_like(flat_grads)
-    comm.Allreduce(flat_grads, global_grads, op=MPI.SUM)
-    _set_flat_params_or_grads(network, global_grads, mode='grads')
+    MPI.COMM_WORLD.Allreduce(flat_grads, global_grads, op=MPI.SUM)
+    _set_flat_grads(network, global_grads)
+
 
 # get the flat grads or params
-def _get_flat_params_or_grads(network, mode='params'):
-    """
-    include two kinds: grads and params
+def _get_flat_grads(network):
+    return np.concatenate([getattr(param, 'grad').cpu().numpy().flatten() for param in network.parameters()])
 
-    """
-    attr = 'data' if mode == 'params' else 'grad'
-    return np.concatenate([getattr(param, attr).cpu().numpy().flatten() for param in network.parameters()])
 
-def _set_flat_params_or_grads(network, flat_params, mode='params'):
-    """
-    include two kinds: grads and params
-
-    """
-    attr = 'data' if mode == 'params' else 'grad'
+def _set_flat_grads(network, flat_params):
     # the pointer
     pointer = 0
     for param in network.parameters():
-        getattr(param, attr).copy_(torch.tensor(flat_params[pointer:pointer + param.data.numel()]).view_as(param.data))
+        getattr(param, 'grad').copy_(
+            torch.tensor(flat_params[pointer:pointer + param.data.numel()]).view_as(param.data))
         pointer += param.data.numel()
+
+
+def calculate_loss_from_all_loss_stats(loss_stats, agent_ids):
+    combined_loss_stats = {}
+    for id in agent_ids:
+        combined_loss_stats[id] = []
+    for loss_stat in loss_stats:
+        for id in agent_ids:
+            combined_loss_stats[id] += loss_stat[id]
+    loss = {}
+    for id in agent_ids:
+        if len(combined_loss_stats[id]) > 0:
+            loss[id] = np.mean(combined_loss_stats[id])
+        else:
+            loss[id] = 0
+    return loss

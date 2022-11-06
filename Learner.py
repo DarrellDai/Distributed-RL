@@ -13,14 +13,15 @@ import _pickle as cPickle
 import yaml
 import argparse
 
-from utils import initialize_model, save_checkpoint, load_checkpoint, wait_until_present, sync_networks, sync_grads
+from utils import initialize_model, save_checkpoint, load_checkpoint, wait_until_present, sync_grads, \
+    calculate_loss_from_all_loss_stats
 from Experience_Replay import Distributed_Memory
 
 
 class Learner:
     def __init__(self, memsize, num_actor=1, epsilon=1, hostname="localhost", device_idx=[0]):
         self.num_actor = num_actor
-        self.memory_size=memsize
+        self.memory_size = memsize
         self.device_idx = device_idx
         self.epsilon = epsilon
         if MPI.COMM_WORLD.Get_rank() == 0:
@@ -35,9 +36,9 @@ class Learner:
             self._connect.delete("Update")
             self._connect.delete("Update params")
             self._connect.delete("Update Experience")
-        self.comm = MPI.COMM_WORLD
 
-        self.device = torch.device('cuda:' + str(device_idx[0]) if torch.cuda.is_available() else 'cpu')
+        self.device = torch.device(
+            'cuda:' + str(device_idx[MPI.COMM_WORLD.Get_rank()]) if torch.cuda.is_available() else 'cpu')
         torch.set_num_threads(10)
 
     def _wait_memory(self):
@@ -51,25 +52,21 @@ class Learner:
             last_length = len(self._memory)
             time.sleep(0.1)
 
-    def _sleep(self):
-        mlen = self._connect.llen("experience")
-        time.sleep(0.01 * mlen)
-
     def initialize_model(self, cnn_out_size, lstm_hidden_size, action_shape, action_out_size, atten_size):
+        self.id_to_name = None
+        self.agent_ids = None
         if MPI.COMM_WORLD.Get_rank() == 0:
             wait_until_present(self._connect, "id_to_name")
             print("Got id_to_name")
-            self.id_to_name=cPickle.loads(self._connect.get("id_to_name"))
+            self.id_to_name = cPickle.loads(self._connect.get("id_to_name"))
             self.agent_ids = tuple(self.id_to_name.keys())
             self._memory = Distributed_Memory(self.memory_size, self.agent_ids, connect=self._connect)
             self._memory.start()
-        self.comm.Bcast(self.id_to_name)
-        self.comm.Bcast(self.agent_ids)
-
+        self.id_to_name = MPI.COMM_WORLD.bcast(self.id_to_name)
+        self.agent_ids = MPI.COMM_WORLD.bcast(self.agent_ids)
         self.main_model = initialize_model(self.agent_ids, cnn_out_size, lstm_hidden_size, action_shape,
                                            action_out_size,
                                            atten_size)
-
 
     def get_model_state_dict(self):
         model_state_dict = {}
@@ -80,6 +77,7 @@ class Learner:
     def initialize_training(self, learning_rate, checkpoint_to_load=None, resume=False):
         self.criterion = nn.MSELoss()
         self.optimizer = {}
+        self.initial_epoch_count = None
         for id in self.agent_ids:
             self.optimizer[id] = torch.optim.Adam(self.main_model[id].parameters(), lr=learning_rate)
         if resume:
@@ -92,158 +90,172 @@ class Learner:
                 self._connect.set("epsilon", cPickle.dumps(self.epsilon))
                 self._connect.set("success_count", cPickle.dumps(success_count))
                 self._connect.set("epoch", cPickle.dumps(self.initial_epoch_count))
-            self.comm.Bcast(self.epsilon)
+                for id in self.agent_ids:
+                    self.main_model[id].load_state_dict(model_state_dicts[id])
+                    self.optimizer[id].load_state_dict(optimizer_state_dicts[id])
+                self._connect.set("params", cPickle.dumps(self.get_model_state_dict()))
+
+            self.epsilon = MPI.COMM_WORLD.bcast(self.epsilon)
+            self.initial_epoch_count = MPI.COMM_WORLD.bcast(self.initial_epoch_count)
             for id in self.agent_ids:
-                self.main_model[id].load_state_dict(model_state_dicts[id])
-                self.optimizer[id].load_state_dict(optimizer_state_dicts[id])
+                self.main_model[id].load_state_dict(MPI.COMM_WORLD.bcast(self.main_model[id].state_dict()))
+
+                self.optimizer[id].load_state_dict(MPI.COMM_WORLD.bcast(self.optimizer[id].state_dict()))
         else:
+            if MPI.COMM_WORLD.Get_rank() == 0:
+                self._connect.set("episode_count", cPickle.dumps(0))
+                self._connect.set("epsilon", cPickle.dumps(1))
+                self._connect.set("success_count", cPickle.dumps(0))
+                self._connect.set("epoch", cPickle.dumps(0))
+                self._connect.set("params", cPickle.dumps(self.get_model_state_dict()))
             self.initial_epoch_count = 0
-            self._connect.set("episode_count", cPickle.dumps(0))
-            self._connect.set("epsilon", cPickle.dumps(1))
-            self._connect.set("success_count", cPickle.dumps(0))
-            self._connect.set("epoch", cPickle.dumps(0))
         self.target_model = deepcopy(self.main_model)
-        self._connect.set("params", cPickle.dumps(self.get_model_state_dict()))
 
     def train(self, batch_size, time_step, gamma, learning_rate, final_epsilon, epsilon_vanish_rate, name_tensorboard,
               total_epochs, actor_update_freq, target_update_freq,
               performance_display_interval, checkpoint_save_interval, checkpoint_to_save):
-
-        writer = SummaryWriter(os.path.join("runs", name_tensorboard))
+        if MPI.COMM_WORLD.Get_rank() == 0:
+            writer = SummaryWriter(os.path.join("runs", name_tensorboard))
+            self._wait_memory()
+            counter = tqdm(range(self.initial_epoch_count, total_epochs))
+        else:
+            counter = range(self.initial_epoch_count, total_epochs)
         loss_stat = {}
-        self._wait_memory()
-        for epoch in tqdm(range(self.initial_epoch_count, total_epochs)):
+        batches = None
+        for epoch in counter:
             for id in self.agent_ids:
                 loss_stat[id] = []
-            self.learn(batch_size, time_step, gamma, loss_stat)
-            if epoch % actor_update_freq == 0:
-                with self._connect.lock("Update params"):
-                    self._connect.set("params", cPickle.dumps(self.get_model_state_dict()))
-            if self.epsilon > final_epsilon:
-                self.epsilon *= epsilon_vanish_rate
-            with self._connect.lock("Update"):
-                self._connect.set("epoch", cPickle.dumps(epoch))
-                self._connect.set("epsilon", cPickle.dumps(self.epsilon))
-                wait_until_present(self._connect, "success_count")
-                success_count = cPickle.loads(self._connect.get("success_count"))
-                # print("Learner got success_count")
-                wait_until_present(self._connect, "episode_count")
-                episode_count = cPickle.loads(self._connect.get("episode_count"))
-                # print("Learner got episode_count")
+            if MPI.COMM_WORLD.Get_rank() == 0:
+                batches = self._memory.get_batch(bsize=batch_size, num_batch=MPI.COMM_WORLD.Get_size(),
+                                                 time_step=time_step)
+            batch = MPI.COMM_WORLD.scatter(batches)
+            self.learn(batch, time_step, gamma, loss_stat)
 
-            loss = {}
-            for id in self.agent_ids:
-                if len(loss_stat[id]) > 0:
-                    loss[id] = np.mean(loss_stat[id])
-                else:
-                    loss[id] = 0
-                # todo: success_count should be associated to player type
-                if episode_count!=0:
-                    writer.add_scalar(self.id_to_name[id] + ": Success Rate vs Epoch",
-                                  success_count / episode_count,
-                                  epoch)
-                writer.add_scalar(self.id_to_name[id] + ": Loss vs Epoch", loss[id], epoch)
-            writer.flush()
-            if (epoch + 1) % target_update_freq == 0:
+            loss_stats = MPI.COMM_WORLD.gather(loss_stat)
+            if MPI.COMM_WORLD.Get_rank() == 0:
+                loss = calculate_loss_from_all_loss_stats(loss_stats, self.agent_ids)
+                with self._connect.lock("Update"):
+                    self._connect.set("epoch", cPickle.dumps(epoch))
+                    self._connect.set("epsilon", cPickle.dumps(self.epsilon))
+                    wait_until_present(self._connect, "success_count")
+                    success_count = cPickle.loads(self._connect.get("success_count"))
+                    # print("Learner got success_count")
+                    wait_until_present(self._connect, "episode_count")
+                    episode_count = cPickle.loads(self._connect.get("episode_count"))
+                    # print("Learner got episode_count")
+                if (epoch + 1) % performance_display_interval == 0:
+                    print('\n Epoch: [%d | %d] LR: %f Epsilon : %f \n' % (
+                    epoch, total_epochs, learning_rate, self.epsilon))
+                    for id in self.agent_ids:
+                        print('\n Agent %d, Loss: %f \n' % (id, loss[id]))
                 for id in self.agent_ids:
-                    self.target_model[id].load_state_dict(self.main_model[id].state_dict())
-            if (epoch + 1) % checkpoint_save_interval == 0:
-                model_state_dicts = {}
-                optimizer_state_dicts = {}
-                for id in self.agent_ids:
-                    model_state_dicts[id] = self.main_model[id].state_dict()
-                    optimizer_state_dicts[id] = self.optimizer[id].state_dict()
-                save_checkpoint({
-                    'model_state_dicts': model_state_dicts,
-                    'optimizer_state_dicts': optimizer_state_dicts,
-                    'epsilon': self.epsilon,
-                    "episode_count": episode_count,
-                    "epoch_count": epoch,
-                    "success_count": success_count
-                }, filename=checkpoint_to_save)
+                    # todo: success_count should be associated to player type
+                    if episode_count != 0:
+                        writer.add_scalar(self.id_to_name[id] + ": Success Rate vs Epoch",
+                                          success_count / episode_count,
+                                          epoch)
+                    writer.add_scalar(self.id_to_name[id] + ": Loss vs Epoch", loss[id], epoch)
+                writer.flush()
 
-            if (epoch + 1) % performance_display_interval == 0:
-                print('\n Epoch: [%d | %d] LR: %f Epsilon : %f \n' % (epoch, total_epochs, learning_rate, self.epsilon))
-                for id in self.agent_ids:
-                    print('\n Agent %d, Loss: %f \n' % (id, loss[id]))
+                if epoch % actor_update_freq == 0:
+                    with self._connect.lock("Update params"):
+                        self._connect.set("params", cPickle.dumps(self.get_model_state_dict()))
+                if self.epsilon > final_epsilon:
+                    self.epsilon *= epsilon_vanish_rate
 
-            self._sleep()
+                if (epoch + 1) % target_update_freq == 0:
+                    for id in self.agent_ids:
+                        self.target_model[id].load_state_dict(self.main_model[id].state_dict())
+                if (epoch + 1) % checkpoint_save_interval == 0:
+                    model_state_dicts = {}
+                    optimizer_state_dicts = {}
+                    for id in self.agent_ids:
+                        model_state_dicts[id] = self.main_model[id].state_dict()
+                        optimizer_state_dicts[id] = self.optimizer[id].state_dict()
+                    save_checkpoint({
+                        'model_state_dicts': model_state_dicts,
+                        'optimizer_state_dicts': optimizer_state_dicts,
+                        'epsilon': self.epsilon,
+                        "episode_count": episode_count,
+                        "epoch_count": epoch,
+                        "success_count": success_count
+                    }, filename=checkpoint_to_save)
 
-    def learn(self, batch_size, time_step, gamma, loss_stat):
+    def learn(self, batch, time_step, gamma, loss_stat):
         for id in self.agent_ids:
-            batches = self._memory.get_batch(bsize=batch_size, num_batch=1, time_step=time_step, agent_id=id)
-            for batch in batches:
-                hidden_batch, cell_batch, out_batch = self.main_model[id].module.lstm.init_hidden_states_and_outputs(
-                    bsize=len(batch))
-                hidden_batch.to(self.device)
-                cell_batch.to(self.device)
-                out_batch.to(self.device)
-                current_visual_obs = []
-                current_vector_obs = []
-                act = []
-                rewards = []
-                next_visual_obs = []
-                next_vector_obs = []
+            hidden_batch, cell_batch, out_batch = self.main_model[id].lstm.init_hidden_states_and_outputs(
+                bsize=len(batch[id]))
+            hidden_batch.to(self.device)
+            cell_batch.to(self.device)
+            out_batch.to(self.device)
+            current_visual_obs = []
+            current_vector_obs = []
+            act = []
+            rewards = []
+            next_visual_obs = []
+            next_vector_obs = []
 
-                for b in batch:
-                    cvis, cves, ac, rw, nvis, nves = [], [], [], [], [], []
-                    for element in b:
-                        cvis.append(element[0][0])
-                        cves.append(element[0][1][list(element[0][1].keys())[0]])
-                        ac.append(element[1])
-                        rw.append(element[2])
-                        nvis.append(element[3][0])
-                        nves.append(element[3][1][list(element[0][1].keys())[0]])
-                    current_visual_obs.append(cvis)
-                    current_vector_obs.append(cves)
-                    act.append(ac)
-                    rewards.append(rw)
-                    next_visual_obs.append(nvis)
-                    next_vector_obs.append(nves)
+            for b in batch[id]:
+                cvis, cves, ac, rw, nvis, nves = [], [], [], [], [], []
+                for element in b:
+                    cvis.append(element[0][0])
+                    cves.append(element[0][1][list(element[0][1].keys())[0]])
+                    ac.append(element[1])
+                    rw.append(element[2])
+                    nvis.append(element[3][0])
+                    nves.append(element[3][1][list(element[0][1].keys())[0]])
+                current_visual_obs.append(cvis)
+                current_vector_obs.append(cves)
+                act.append(ac)
+                rewards.append(rw)
+                next_visual_obs.append(nvis)
+                next_vector_obs.append(nves)
 
-                current_visual_obs = np.array(current_visual_obs)
-                current_vector_obs = np.array(current_vector_obs)
-                act = np.array(act)
-                rewards = np.array(rewards)
-                next_visual_obs = np.array(next_visual_obs)
-                next_vector_obs = np.array(next_vector_obs)
+            current_visual_obs = np.array(current_visual_obs)
+            current_vector_obs = np.array(current_vector_obs)
+            act = np.array(act)
+            rewards = np.array(rewards)
+            next_visual_obs = np.array(next_visual_obs)
+            next_vector_obs = np.array(next_vector_obs)
 
-                current_visual_obs = torch.from_numpy(current_visual_obs).float().to(self.device)
-                act = torch.from_numpy(act).long().to(self.device)
-                rewards = torch.from_numpy(rewards).float().to(self.device)
-                next_visual_obs = torch.from_numpy(next_visual_obs).float().to(self.device)
-                visual_obs = torch.concat((current_visual_obs, next_visual_obs[:, -1:]), 1)
-                Q_next_max = torch.zeros(len(batch)).float().to(self.device)
-                for batch_idx in range(len(batch)):
-                    _, _, Q_next, _, _ = self.target_model[id](visual_obs[batch_idx:batch_idx + 1],
-                                                               act[batch_idx:batch_idx + 1],
-                                                               hidden_state=hidden_batch[
-                                                                            batch_idx:batch_idx + 1],
-                                                               cell_state=cell_batch[
-                                                                          batch_idx:batch_idx + 1],
-                                                               lstm_out=out_batch[
-                                                                        batch_idx:batch_idx + 1])
-                    Q_next_max[batch_idx] = torch.max(Q_next.reshape(-1))
-                target_values = rewards[:, time_step - 1] + (gamma * Q_next_max)
-                target_values = target_values.float()
+            current_visual_obs = torch.from_numpy(current_visual_obs).float().to(self.device)
+            act = torch.from_numpy(act).long().to(self.device)
+            rewards = torch.from_numpy(rewards).float().to(self.device)
+            next_visual_obs = torch.from_numpy(next_visual_obs).float().to(self.device)
+            visual_obs = torch.concat((current_visual_obs, next_visual_obs[:, -1:]), 1)
+            Q_next_max = torch.zeros(len(batch)).float().to(self.device)
+            for batch_idx in range(len(batch)):
+                _, _, Q_next, _, _ = self.target_model[id](visual_obs[batch_idx:batch_idx + 1],
+                                                           act[batch_idx:batch_idx + 1],
+                                                           hidden_state=hidden_batch[
+                                                                        batch_idx:batch_idx + 1],
+                                                           cell_state=cell_batch[
+                                                                      batch_idx:batch_idx + 1],
+                                                           lstm_out=out_batch[
+                                                                    batch_idx:batch_idx + 1])
+                Q_next_max[batch_idx] = torch.max(Q_next.reshape(-1))
+            target_values = rewards[:, time_step - 1] + (gamma * Q_next_max)
+            target_values = target_values.float()
 
-                _, _, Q_s, _, _ = self.main_model[id](current_visual_obs, act,
-                                                      hidden_state=hidden_batch, cell_state=cell_batch,
-                                                      lstm_out=out_batch)
+            _, _, Q_s, _, _ = self.main_model[id](current_visual_obs, act,
+                                                  hidden_state=hidden_batch, cell_state=cell_batch,
+                                                  lstm_out=out_batch)
 
-                Q_s_a = Q_s[:, 0, 0]
-                loss = self.criterion(Q_s_a, target_values)
+            Q_s_a = Q_s[:, 0, 0]
+            loss = self.criterion(Q_s_a, target_values)
 
-                #  save performance measure
-                loss_stat[id].append(loss.item())
+            #  save performance measure
+            loss_stat[id].append(loss.item())
 
-                # make previous grad zero
-                self.optimizer[id].zero_grad()
+            # make previous grad zero
+            self.optimizer[id].zero_grad()
 
-                # backward
-                loss.backward()
-                # update params
-                self.optimizer[id].step()
+            # backward
+            loss.backward()
+
+            sync_grads(self.main_model[id])
+            # update params
+            self.optimizer[id].step()
 
 
 if __name__ == "__main__":

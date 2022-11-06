@@ -22,23 +22,29 @@ class Memory():
             self.replay_buffer[id].append(episodes[id])
         self.check_dimension()
 
-    #Todo: Change to accept episodes with all length, so some short episode can also be learned
-    def get_batch(self, bsize, num_batch, time_step, agent_id):
+    # Todo: Change to accept episodes with all length, so some short episode can also be learned
+    def get_batch(self, bsize, num_batch, time_step):
         self.check_dimension()
         batches = []
-        memory_long_enough = []
-        for episode in self.replay_buffer[agent_id]:
-            if len(episode) >= time_step:
-                memory_long_enough.append(episode)
-        for _ in range(min(int(np.ceil(len(memory_long_enough) / bsize)),num_batch)):
-            batches.append([])
-        sampled_idx = random.sample(range(len(memory_long_enough)), len(memory_long_enough))
+        memory_long_enough = {}
+        for id in self.agent_ids:
+            memory_long_enough[id] = []
+            for episode in self.replay_buffer[id]:
+                if len(episode) >= time_step:
+                    memory_long_enough[id].append(episode)
+        for i in range(min(int(np.ceil(len(memory_long_enough[self.agent_ids[0]]) / bsize)), num_batch)):
+            batches.append({})
+            for id in self.agent_ids:
+                batches[i][id] = []
+        sampled_idx = random.sample(range(len(memory_long_enough[self.agent_ids[0]])),
+                                    len(memory_long_enough[self.agent_ids[0]]))
         order = 0
         for batch in batches:
-            while len(batch) < bsize and order < len(memory_long_enough):
-                point = np.random.randint(0, len(memory_long_enough[sampled_idx[order]]) + 1 - time_step)
-                batch.append(memory_long_enough[sampled_idx[order]][point:point + time_step])
-                order += 1
+            for id in self.agent_ids:
+                while len(batch[id]) < bsize and order < len(memory_long_enough[id]):
+                    point = np.random.randint(0, len(memory_long_enough[id][sampled_idx[order]]) + 1 - time_step)
+                    batch[id].append(memory_long_enough[id][sampled_idx[order]][point:point + time_step])
+                    order += 1
         return batches
 
     def check_dimension(self):
@@ -81,9 +87,9 @@ class Distributed_Memory(threading.Thread):
                                 self._memory.add_episode(episode)
             time.sleep(0.01)
 
-    def get_batch(self, bsize, num_batch, time_step, agent_id):
+    def get_batch(self, bsize, num_batch, time_step):
         with self._lock:
-            return self._memory.get_batch(bsize, num_batch, time_step, agent_id)
+            return self._memory.get_batch(bsize, num_batch, time_step)
 
     def __len__(self):
         return len(self._memory)
