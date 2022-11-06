@@ -40,7 +40,12 @@ class Actor:
         self.num_actor = num_actor
         self.device_idx = device_idx
         self.memory_size=memsize
-        self.device = torch.device('cuda:' + str(device_idx) if torch.cuda.is_available() else 'cpu')
+        if device_idx==-1:
+            self.device = torch.device('cpu')
+        else:
+            if not torch.cuda.is_available():
+                raise RuntimeError("CUDA is not available, please choose CPU by setting device_idx=-1")
+            self.device = torch.device('cuda:' + str(device_idx))
         self._connect = redis.Redis(host=hostname)
         random.seed(seed)
         torch.set_num_threads(1)
@@ -63,8 +68,7 @@ class Actor:
             self.atten_size[self.agent_ids[idx]] = atten_size[idx]
 
         self.model = initialize_model(self.agent_ids, cnn_out_size, lstm_hidden_size, action_shape, action_out_size,
-                                      atten_size)
-        wrap_model_with_dataparallel(self.model, [self.device_idx])
+                                      atten_size, self.device)
         self._pull_params()
 
     def find_random_action_while_updating_LSTM(self, prev_obs, hidden_state, cell_state, lstm_out):
@@ -142,6 +146,9 @@ class Actor:
             while step_count < max_steps and not done:
                 for id in self.agent_ids:
                     prev_obs[id][0] = torch.from_numpy(prev_obs[id][0]).float().to(self.device)
+                    hidden_state[id]=hidden_state[id].to(self.device)
+                    cell_state[id]=cell_state[id].to(self.device)
+                    lstm_out[id]=lstm_out[id].to(self.device)
                 step_count += 1
                 with torch.no_grad():
                     if np.random.rand(1) < epsilon:

@@ -37,8 +37,13 @@ class Learner:
             self._connect.delete("Update params")
             self._connect.delete("Update Experience")
 
-        self.device = torch.device(
-            'cuda:' + str(device_idx[MPI.COMM_WORLD.Get_rank()]) if torch.cuda.is_available() else 'cpu')
+        if device_idx==-1:
+            self.device = torch.device('cpu')
+        else:
+            if not torch.cuda.is_available():
+                raise RuntimeError("CUDA is not available, please choose CPU by setting device_idx=-1")
+            self.device = torch.device(
+                'cuda:' + str(device_idx[MPI.COMM_WORLD.Get_rank()]))
         torch.set_num_threads(10)
 
     def _wait_memory(self):
@@ -66,7 +71,7 @@ class Learner:
         self.agent_ids = MPI.COMM_WORLD.bcast(self.agent_ids)
         self.main_model = initialize_model(self.agent_ids, cnn_out_size, lstm_hidden_size, action_shape,
                                            action_out_size,
-                                           atten_size)
+                                           atten_size, self.device)
 
     def get_model_state_dict(self):
         model_state_dict = {}
@@ -126,7 +131,7 @@ class Learner:
             for id in self.agent_ids:
                 loss_stat[id] = []
             if MPI.COMM_WORLD.Get_rank() == 0:
-                batches = self._memory.get_batch(bsize=batch_size, num_batch=MPI.COMM_WORLD.Get_size(),
+                batches = self._memory.get_batch(bsize=batch_size, num_learner=MPI.COMM_WORLD.Get_size(), num_batch=1,
                                                  time_step=time_step)
             batch = MPI.COMM_WORLD.scatter(batches)
             self.learn(batch, time_step, gamma, loss_stat)
@@ -181,81 +186,97 @@ class Learner:
                         "success_count": success_count
                     }, filename=checkpoint_to_save)
 
-    def learn(self, batch, time_step, gamma, loss_stat):
+    def learn(self, batches, time_step, gamma, loss_stat):
         for id in self.agent_ids:
-            hidden_batch, cell_batch, out_batch = self.main_model[id].lstm.init_hidden_states_and_outputs(
-                bsize=len(batch[id]))
-            hidden_batch.to(self.device)
-            cell_batch.to(self.device)
-            out_batch.to(self.device)
-            current_visual_obs = []
-            current_vector_obs = []
-            act = []
-            rewards = []
-            next_visual_obs = []
-            next_vector_obs = []
+            for batch in batches[id]:
+                hidden_batch, cell_batch, out_batch = self.main_model[id].lstm.init_hidden_states_and_outputs(
+                    bsize=len(batch))
+                hidden_batch=hidden_batch.to(self.device)
+                cell_batch=cell_batch.to(self.device)
+                out_batch=out_batch.to(self.device)
+                act, current_vector_obs, current_visual_obs, next_vector_obs, next_visual_obs, rewards = self.preprocess_data_from_batch(
+                    batch)
 
-            for b in batch[id]:
-                cvis, cves, ac, rw, nvis, nves = [], [], [], [], [], []
-                for element in b:
-                    cvis.append(element[0][0])
-                    cves.append(element[0][1][list(element[0][1].keys())[0]])
-                    ac.append(element[1])
-                    rw.append(element[2])
-                    nvis.append(element[3][0])
-                    nves.append(element[3][1][list(element[0][1].keys())[0]])
-                current_visual_obs.append(cvis)
-                current_vector_obs.append(cves)
-                act.append(ac)
-                rewards.append(rw)
-                next_visual_obs.append(nvis)
-                next_vector_obs.append(nves)
+                Q_next_max = torch.zeros(len(batch)).float().to(self.device)
+                Q_s_a=torch.zeros(len(batch)).float().to(self.device)
+                target_values=torch.zeros(len(batch)).float().to(self.device)
+                for batch_idx in range(len(batch)):
+                    act_per_episode, current_visual_obs_per_episode, rewards_per_episode, visual_obs_per_episode = self.extract_input_per_episode(
+                        act, batch_idx, current_vector_obs, current_visual_obs, next_vector_obs, next_visual_obs,
+                        rewards)
+                    _, _, Q_next, _, _ = self.target_model[id](visual_obs_per_episode,
+                                                               act_per_episode,
+                                                               hidden_state=hidden_batch[
+                                                                            batch_idx:batch_idx + 1],
+                                                               cell_state=cell_batch[
+                                                                          batch_idx:batch_idx + 1],
+                                                               lstm_out=out_batch[
+                                                                        batch_idx:batch_idx + 1])
+                    Q_next_max[batch_idx] = torch.max(Q_next.reshape(-1))
+                    _, _, Q_s, _, _ = self.main_model[id](current_visual_obs_per_episode, act_per_episode,
+                                                          hidden_state=hidden_batch[batch_idx:batch_idx + 1], cell_state=cell_batch[batch_idx:batch_idx + 1],
+                                                          lstm_out=out_batch[batch_idx:batch_idx + 1])
+                    # Only one action to select since the action is known
+                    Q_s_a[batch_idx] = Q_s[0, 0, 0]
+                    target_values[batch_idx] = rewards_per_episode[time_step - 1] + (gamma * Q_next_max[batch_idx])
+                target_values = target_values.float()
 
-            current_visual_obs = np.array(current_visual_obs)
-            current_vector_obs = np.array(current_vector_obs)
-            act = np.array(act)
-            rewards = np.array(rewards)
-            next_visual_obs = np.array(next_visual_obs)
-            next_vector_obs = np.array(next_vector_obs)
 
-            current_visual_obs = torch.from_numpy(current_visual_obs).float().to(self.device)
-            act = torch.from_numpy(act).long().to(self.device)
-            rewards = torch.from_numpy(rewards).float().to(self.device)
-            next_visual_obs = torch.from_numpy(next_visual_obs).float().to(self.device)
-            visual_obs = torch.concat((current_visual_obs, next_visual_obs[:, -1:]), 1)
-            Q_next_max = torch.zeros(len(batch)).float().to(self.device)
-            for batch_idx in range(len(batch)):
-                _, _, Q_next, _, _ = self.target_model[id](visual_obs[batch_idx:batch_idx + 1],
-                                                           act[batch_idx:batch_idx + 1],
-                                                           hidden_state=hidden_batch[
-                                                                        batch_idx:batch_idx + 1],
-                                                           cell_state=cell_batch[
-                                                                      batch_idx:batch_idx + 1],
-                                                           lstm_out=out_batch[
-                                                                    batch_idx:batch_idx + 1])
-                Q_next_max[batch_idx] = torch.max(Q_next.reshape(-1))
-            target_values = rewards[:, time_step - 1] + (gamma * Q_next_max)
-            target_values = target_values.float()
+                loss = self.criterion(Q_s_a, target_values)
 
-            _, _, Q_s, _, _ = self.main_model[id](current_visual_obs, act,
-                                                  hidden_state=hidden_batch, cell_state=cell_batch,
-                                                  lstm_out=out_batch)
+                #  save performance measure
+                loss_stat[id].append(loss.item())
 
-            Q_s_a = Q_s[:, 0, 0]
-            loss = self.criterion(Q_s_a, target_values)
+                # make previous grad zero
+                self.optimizer[id].zero_grad()
 
-            #  save performance measure
-            loss_stat[id].append(loss.item())
+                # backward
+                loss.backward()
 
-            # make previous grad zero
-            self.optimizer[id].zero_grad()
+                sync_grads(self.main_model[id])
+                # update params
+                self.optimizer[id].step()
 
-            # backward
-            loss.backward()
+    def preprocess_data_from_batch(self, batch):
+        current_visual_obs = []
+        current_vector_obs = []
+        act = []
+        rewards = []
+        next_visual_obs = []
+        next_vector_obs = []
+        for b in batch:
+            cvis, cves, ac, rw, nvis, nves = [], [], [], [], [], []
+            for element in b:
+                cvis.append(element[0][0])
+                cves.append(element[0][1][list(element[0][1].keys())[0]])
+                ac.append(element[1])
+                rw.append(element[2])
+                nvis.append(element[3][0])
+                nves.append(element[3][1][list(element[0][1].keys())[0]])
+            current_visual_obs.append(cvis)
+            current_vector_obs.append(cves)
+            act.append(ac)
+            rewards.append(rw)
+            next_visual_obs.append(nvis)
+            next_vector_obs.append(nves)
+        return act, current_vector_obs, current_visual_obs, next_vector_obs, next_visual_obs, rewards
 
-            sync_grads(self.main_model[id])
-            # update params
-            self.optimizer[id].step()
+    def extract_input_per_episode(self, act, batch_idx, current_vector_obs, current_visual_obs, next_vector_obs, next_visual_obs,
+                                  rewards):
+        current_visual_obs_per_episode = np.array(current_visual_obs[batch_idx])
+        current_vector_obs_per_episode = np.array(current_vector_obs[batch_idx])
+        act_per_episode = np.array(act[batch_idx])
+        rewards_per_episode = np.array(rewards[batch_idx])
+        next_visual_obs_per_episode = np.array(next_visual_obs[batch_idx])
+        next_vector_obs_per_episode = np.array(next_vector_obs[batch_idx])
+        current_visual_obs_per_episode = torch.from_numpy(current_visual_obs_per_episode).float().to(
+            self.device).unsqueeze(0)
+        next_visual_obs_per_episode = torch.from_numpy(next_visual_obs_per_episode).float().to(
+            self.device).unsqueeze(0)
+        act_per_episode = torch.from_numpy(act_per_episode).long().to(self.device).unsqueeze(0)
+        rewards_per_episode = torch.from_numpy(rewards_per_episode).float().to(self.device)
+        visual_obs_per_episode = torch.concat((current_visual_obs_per_episode, next_visual_obs_per_episode[:, -1:]), 1)
+        return act_per_episode, current_visual_obs_per_episode, rewards_per_episode, visual_obs_per_episode
 
 
 if __name__ == "__main__":

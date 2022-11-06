@@ -23,28 +23,27 @@ class Memory():
         self.check_dimension()
 
     # Todo: Change to accept episodes with all length, so some short episode can also be learned
-    def get_batch(self, bsize, num_batch, time_step):
+    def get_batch(self, bsize, num_batch, num_learner, time_step):
         self.check_dimension()
+        self.check_total_num_vs_needed_for_batch(bsize, num_batch, num_learner)
         batches = []
-        memory_long_enough = {}
-        for id in self.agent_ids:
-            memory_long_enough[id] = []
-            for episode in self.replay_buffer[id]:
-                if len(episode) >= time_step:
-                    memory_long_enough[id].append(episode)
-        for i in range(min(int(np.ceil(len(memory_long_enough[self.agent_ids[0]]) / bsize)), num_batch)):
+        for i in range(num_learner):
             batches.append({})
             for id in self.agent_ids:
                 batches[i][id] = []
-        sampled_idx = random.sample(range(len(memory_long_enough[self.agent_ids[0]])),
-                                    len(memory_long_enough[self.agent_ids[0]]))
+        sampled_idx = random.sample(range(len(self)),
+                                    min(num_batch*bsize, len(self)))
         order = 0
         for batch in batches:
             for id in self.agent_ids:
-                while len(batch[id]) < bsize and order < len(memory_long_enough[id]):
-                    point = np.random.randint(0, len(memory_long_enough[id][sampled_idx[order]]) + 1 - time_step)
-                    batch[id].append(memory_long_enough[id][sampled_idx[order]][point:point + time_step])
-                    order += 1
+                buffer=[]
+                for i in range(bsize):
+                    try:
+                        point = np.random.randint(0, len(self.replay_buffer[id][sampled_idx[order]]) + 1 - time_step)
+                        buffer.append(self.replay_buffer[id][sampled_idx[order]][point:point + time_step])
+                    except:
+                        buffer.append(self.replay_buffer[id][sampled_idx[order]])
+                    batch[id].append(buffer)
         return batches
 
     def check_dimension(self):
@@ -52,8 +51,10 @@ class Memory():
             for episode in self.replay_buffer[id]:
                 for t in episode:
                     if len(t[0][0].shape) != 3:
-                        raise RuntimeError
-
+                        raise RuntimeError("The dimension of the visual observation is wrong")
+    def check_total_num_vs_needed_for_batch(self, bsize, batch_size, num_learner):
+        if bsize*batch_size*num_learner>len(self):
+            raise RuntimeError("Memory is not enough for making the batches")
     def __len__(self):
         return len(self.replay_buffer[self.agent_ids[0]])
 
@@ -87,9 +88,9 @@ class Distributed_Memory(threading.Thread):
                                 self._memory.add_episode(episode)
             time.sleep(0.01)
 
-    def get_batch(self, bsize, num_batch, time_step):
+    def get_batch(self, bsize, num_batch, num_learner, time_step):
         with self._lock:
-            return self._memory.get_batch(bsize, num_batch, time_step)
+            return self._memory.get_batch(bsize, num_batch, num_learner, time_step)
 
     def __len__(self):
         return len(self._memory)
