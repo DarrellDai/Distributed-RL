@@ -157,7 +157,7 @@ class Human_play:
 if __name__=="__main__":
     parser = argparse.ArgumentParser(description='Learner process for distributed reinforcement.')
     parser.add_argument('-m', '--mode', type=str, default='s', help="Runing mode. s:save_mode, l:load_mode, r: real time mode")
-    parser.add_argument('-rc', '--run_config', type=str, default='Human_play.yaml', help="Running config file name")
+    parser.add_argument('-rc', '--run_config', type=str, default='Human_Play.yaml', help="Running config file name")
     parser.add_argument('-w', '--worker', type=int, default=0, help="Worker id to run the environment")
     args=parser.parse_args()
     with open("Config/"+args.run_config) as file:
