@@ -209,7 +209,6 @@ class Actor:
                     if not done:
                         success_count += 1
                     self._connect.set("success_count", cPickle.dumps(success_count))
-                    print(success_count/episode_count)
                     self._connect.set("epsilon", cPickle.dumps(epsilon))
                     wait_until_present(self._connect, "epoch")
                     epoch = cPickle.loads(self._connect.get("epoch"))
