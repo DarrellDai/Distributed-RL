@@ -7,7 +7,7 @@ from torch.utils.tensorboard import SummaryWriter
 import os
 from copy import deepcopy
 import redis
-import time
+import threading
 import yaml
 import random
 from itertools import count
@@ -17,7 +17,6 @@ from mlagents_envs.environment import UnityEnvironment
 
 import _pickle as cPickle
 from utils import initialize_model, find_optimal_action, \
-    wrap_model_with_dataparallel, \
     find_hidden_cell_out_of_an_action, \
     combine_out, wait_until_present, get_agents_id_to_name
 from Experience_Replay import Memory
@@ -26,17 +25,14 @@ from Experience_Replay import Memory
 class Actor:
     def __init__(
             self,
-            actor_idx=0,
             num_actor=1,
-            device_idx=0,
+            device_idx=[0],
             memsize=100,
             hostname="localhost",
-            seed=0
 
     ):
 
 
-        self.actor_idx = actor_idx
         self.num_actor = num_actor
         self.device_idx = device_idx
         self.memory_size=memsize
@@ -47,20 +43,17 @@ class Actor:
                 raise RuntimeError("CUDA is not available, please choose CPU by setting device_idx=-1")
             self.device = torch.device('cuda:' + str(device_idx))
         self._connect = redis.Redis(host=hostname)
-        random.seed(seed)
-        torch.set_num_threads(1)
+        torch.set_num_threads(10)
 
-    def initialize_env(self, env_path):
-        unity_env = UnityEnvironment(env_path, worker_id=self.actor_idx)
-        self.env = MultiUnityWrapper(unity_env=unity_env, uint8_visual=True, allow_multiple_obs=True)
-        self.id_to_name = get_agents_id_to_name(self.env)
-        self.agent_ids = tuple(self.id_to_name.keys())
-        if self.actor_idx==0:
+    def initialize_env(self, env_path, actor_idx):
+        unity_env = UnityEnvironment(env_path+"_"+str(actor_idx)+"/Hide and Seek", worker_id=actor_idx)
+        env = MultiUnityWrapper(unity_env=unity_env, uint8_visual=True, allow_multiple_obs=True)
+        if actor_idx==0:
+            self.id_to_name = get_agents_id_to_name(env)
+            self.agent_ids = tuple(self.id_to_name.keys())
             self._connect.set("id_to_name", cPickle.dumps(self.id_to_name))
-
-
+        return env
     def initialize_model(self, cnn_out_size, lstm_hidden_size, action_shape, action_out_size, atten_size):
-        self.memory = Memory(self.memory_size, self.agent_ids)
         self.action_shape = {}
         self.atten_size = {}
         for idx in range(len(self.agent_ids)):
@@ -71,10 +64,10 @@ class Actor:
                                       atten_size, self.device)
         self._pull_params()
 
-    def find_random_action_while_updating_LSTM(self, prev_obs, hidden_state, cell_state, lstm_out):
+    def find_random_action_while_updating_LSTM(self, env, prev_obs, hidden_state, cell_state, lstm_out):
         act = {}
         for id in self.agent_ids:
-            act[id] = self.env.action_space[id].sample() - 1
+            act[id] = env.action_space[id].sample() - 1
             act[id] = torch.tensor(act[id]).reshape(1, 1, len(act[id])).to(self.device)
             prev_obs[id][0] = prev_obs[id][0].reshape(1, 1, prev_obs[id][0].shape[0], prev_obs[id][0].shape[1],
                                                       prev_obs[id][0].shape[2])
@@ -117,7 +110,8 @@ class Actor:
             cell_state[id] = cell_state[id]
         return act, hidden_state, cell_state, lstm_out
 
-    def collect_data(self, max_steps, name_tensorboard, actor_update_freq):
+    def collect_data(self, env, max_steps, name_tensorboard, actor_update_freq, actor_idx):
+        memory = Memory(self.memory_size, self.agent_ids)
         writer = SummaryWriter(os.path.join("runs", name_tensorboard))
         total_reward = {}
         local_memory = {}
@@ -133,7 +127,7 @@ class Actor:
         for _ in count():
 
             step_count = 0
-            prev_obs = self.env.reset()
+            prev_obs = env.reset()
 
             for id in self.agent_ids:
                 total_reward[id] = 0
@@ -151,16 +145,18 @@ class Actor:
                     lstm_out[id]=lstm_out[id].to(self.device)
                 step_count += 1
                 with torch.no_grad():
-                    if np.random.rand(1) < epsilon:
+                    with threading.Lock():
+                        if np.random.rand(1) < epsilon:
 
-                        act, hidden_state, cell_state, lstm_out = self.find_random_action_while_updating_LSTM(prev_obs,
-                                                                                                              hidden_state,
-                                                                                                              cell_state,
-                                                                                                              lstm_out)
-                    else:
-                        act, hidden_state, cell_state, lstm_out = self.find_best_action_by_model(prev_obs, hidden_state,
-                                                                                                 cell_state, lstm_out)
-                    obs_dict, reward_dict, done_dict, info_dict = self.env.step(act)
+                            act, hidden_state, cell_state, lstm_out = self.find_random_action_while_updating_LSTM(env,
+                                                                                                                  prev_obs,
+                                                                                                                  hidden_state,
+                                                                                                                  cell_state,
+                                                                                                                  lstm_out)
+                        else:
+                            act, hidden_state, cell_state, lstm_out = self.find_best_action_by_model(prev_obs, hidden_state,
+                                                                                                     cell_state, lstm_out)
+                    obs_dict, reward_dict, done_dict, info_dict = env.step(act)
 
                     done = done_dict["__all__"]
 
@@ -181,14 +177,14 @@ class Actor:
 
             # save performance measure
             # print("Sending memory")
-            self.memory.add_episode(local_memory)
+            memory.add_episode(local_memory)
             # print("Actor {} got {}/{} episodes".format(self.actor_idx, len(self.memory), int(np.ceil(self.memory.memsize / self.num_actor))))
-            if len(self.memory) >= self.memory.memsize / self.num_actor:
+            if len(memory) >= memory.memsize / self.num_actor:
                 # print("Sending memory")
                 with self._connect.lock("Update Experience"):
-                    self._connect.rpush("experience", cPickle.dumps(self.memory))
+                    self._connect.rpush("experience", cPickle.dumps(memory))
                 for id in self.agent_ids:
-                    self.memory.replay_buffer[id].clear()
+                    memory.replay_buffer[id].clear()
 
             with self._connect.lock("Update"):
                 wait_until_present(self._connect, "episode_count")
@@ -209,10 +205,7 @@ class Actor:
                     writer.add_scalar(self.id_to_name[id] + ": Reward vs Episode", total_reward[id], episode_count)
                 writer.flush()
 
-
-
-
-            if epoch % actor_update_freq == 0 and prev_epoch != epoch:
+            if epoch % actor_update_freq == 0 and prev_epoch != epoch and actor_idx==0:
                 self._pull_params()
 
             prev_epoch = epoch
@@ -221,21 +214,26 @@ class Actor:
         wait_until_present(self._connect, "params")
         # print("Sync params.")
         with self._connect.lock("Update params"):
-            params = self._connect.get("params")
-            for id in self.agent_ids:
-                self.model[id].load_state_dict(cPickle.loads(params)[id])
-                self.model[id].to(self.device)
+            with threading.Lock():
+                params = self._connect.get("params")
+                for id in self.agent_ids:
+                    self.model[id].load_state_dict(cPickle.loads(params)[id])
+                    self.model[id].to(self.device)
 
-
+    def run(self, seed, env, env_path, actor_idx, max_steps, name_tensorboard, actor_update_freq):
+        random.seed(seed)
+        if actor_idx!=0:
+            env=self.initialize_env(env_path, actor_idx)
+        self.collect_data(env=env, max_steps=max_steps,
+                          name_tensorboard=name_tensorboard,
+                          actor_update_freq=actor_update_freq, actor_idx=actor_idx)
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Actor process for distributed reinforcement.')
     parser.add_argument('-n', '--num_actors', type=int, default=1, help='Actor number.')
-    parser.add_argument('-i', '--actor_index', type=int, default=0, help="Index of actor")
     parser.add_argument('-r', '--redisserver', type=str, default='localhost', help="Redis's server name.")
     parser.add_argument('-d', '--device', type=int, default=0, help="Index of GPU to use")
-    parser.add_argument('-s', '--seed', type=int, default=0, help="Seed for randomization")
     parser.add_argument('-mc', '--model_config', type=str, default='Model.yaml', help="Model config file name")
     parser.add_argument('-rc', '--run_config', type=str, default='Train.yaml', help="Running config file name")
     args = parser.parse_args()
@@ -245,14 +243,21 @@ if __name__ == "__main__":
     with open("Config/"+args.run_config) as file:
         run_param = yaml.safe_load(file)
     actor = Actor(
-        actor_idx=args.actor_index,
         num_actor=args.num_actors,
-        device_idx=args.device, memsize=run_param["memory_size"], hostname=args.redisserver, seed=args.seed)
-    actor.initialize_env(run_param["env_path"])
+        device_idx=args.device, memsize=run_param["memory_size"], hostname=args.redisserver)
+    env=actor.initialize_env(run_param["env_path"], 0)
     actor.initialize_model(cnn_out_size=model_param["cnn_out_size"], lstm_hidden_size=model_param["lstm_hidden_size"],
                            action_shape=model_param["action_shape"],
                            action_out_size=model_param["action_out_size"], atten_size=model_param["atten_size"])
-    actor.collect_data(max_steps=run_param["max_steps"],
-                       name_tensorboard=run_param["name_tensorboard"],
-                       actor_update_freq=run_param["actor_update_freq(epochs)"])
-    actor.env.close()
+    threads=[]
+    for i in range(args.num_actors):
+        if i==0:
+            thread=threading.Thread(target=actor.run, args=(i, env,None,i,run_param["max_steps"], run_param["name_tensorboard"], run_param["target_update_freq(epochs)"]))
+        else:
+            thread = threading.Thread(target=actor.run, args=(
+            i, None, run_param["env_path"], i, run_param["max_steps"], run_param["name_tensorboard"],
+            run_param["target_update_freq(epochs)"]))
+        threads.append(thread)
+        thread.start()
+    for thread in threads:
+        thread.join()
