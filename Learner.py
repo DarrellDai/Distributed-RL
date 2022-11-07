@@ -218,7 +218,7 @@ class Learner:
                                                           lstm_out=out_batch[batch_idx:batch_idx + 1])
                     # Only one action to select since the action is known
                     Q_s_a[batch_idx] = Q_s[0, 0, 0]
-                    target_values[batch_idx] = rewards_per_episode[time_step - 1] + (gamma * Q_next_max[batch_idx])
+                    target_values[batch_idx] = rewards_per_episode[-1] + (gamma * Q_next_max[batch_idx])
                 target_values = target_values.float()
 
 

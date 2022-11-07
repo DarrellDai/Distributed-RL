@@ -33,17 +33,16 @@ class Memory():
                 batches[i][id] = []
         sampled_idx = random.sample(range(len(self)),
                                     min(num_batch*bsize, len(self)))
-        order = 0
         for batch in batches:
             for id in self.agent_ids:
                 buffer=[]
                 for i in range(bsize):
                     try:
-                        point = np.random.randint(0, len(self.replay_buffer[id][sampled_idx[order]]) + 1 - time_step)
-                        buffer.append(self.replay_buffer[id][sampled_idx[order]][point:point + time_step])
+                        point = np.random.randint(0, len(self.replay_buffer[id][sampled_idx[i]]) + 1 - time_step)
+                        buffer.append(self.replay_buffer[id][sampled_idx[i]][point:point + time_step])
                     except:
-                        buffer.append(self.replay_buffer[id][sampled_idx[order]])
-                    batch[id].append(buffer)
+                        buffer.append(self.replay_buffer[id][sampled_idx[i]])
+                batch[id].append(buffer)
         return batches
 
     def check_dimension(self):
