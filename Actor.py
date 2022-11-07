@@ -233,7 +233,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Actor process for distributed reinforcement.')
     parser.add_argument('-n', '--num_actors', type=int, default=1, help='Actor number.')
     parser.add_argument('-r', '--redisserver', type=str, default='localhost', help="Redis's server name.")
-    parser.add_argument('-d', '--device', type=int, default=0, help="Index of GPU to use")
+    parser.add_argument('-d', '--device', type=int, default=0, help="Index of GPU to use, -1 is CPU")
     parser.add_argument('-mc', '--model_config', type=str, default='Model.yaml', help="Model config file name")
     parser.add_argument('-rc', '--run_config', type=str, default='Train.yaml', help="Running config file name")
     args = parser.parse_args()

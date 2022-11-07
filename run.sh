@@ -21,16 +21,13 @@ fi
 wait -f $pids
 pids=""
 if $leaner; then
-	python Learner.py -rc $Train_config &
+	mpirun -np $num_learner python Learner.py -rc $Train_config &
 	pids="$pids $!"
 fi
 
 if $actor; then
-    for i in `seq $num_actors`
-    do
-    python Actor.py -n $num_actors -i $(($i-1)) -rc $Train_config -r $redis_server -d $((($i-1)+$first_device)) -s $(($i-1)) &
+    python Actor.py -n $num_actors -rc $Train_config -r $redis_server -d $device &
     pids="$pids $!"
-    done
 fi
 # Exit the this script when there's a child process is done, so all child process will be killed
 wait -n $pids
