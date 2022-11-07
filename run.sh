@@ -13,7 +13,7 @@ echo "redis server:" $redis_server
 
 pids="" 
 if $human_play; then
-    python Learner.py -rc $Train_human_play_config &
+    mpirun -np $num_learner python Learner.py -rc $Train_human_play_config &
     pids="$pids $!"
 	python Human_play.py -m l &
 	pids="$pids $!"
