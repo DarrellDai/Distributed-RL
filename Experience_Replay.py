@@ -51,8 +51,8 @@ class Memory():
                 for t in episode:
                     if len(t[0][0].shape) != 3:
                         raise RuntimeError("The dimension of the visual observation is wrong")
-    def check_total_num_vs_needed_for_batch(self, bsize, batch_size, num_learner):
-        if bsize*batch_size*num_learner>len(self):
+    def check_total_num_vs_needed_for_batch(self, bsize, num_batch, num_learners):
+        if bsize*num_batch*num_learners>len(self):
             raise RuntimeError("Memory is not enough for making the batches")
     def __len__(self):
         return len(self.replay_buffer[self.agent_ids[0]])
