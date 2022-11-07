@@ -134,7 +134,7 @@ class Learner:
                 batches = self._memory.get_batch(bsize=batch_size, num_learner=MPI.COMM_WORLD.Get_size(), num_batch=1,
                                                  time_step=time_step)
             batch = MPI.COMM_WORLD.scatter(batches)
-            self.learn(batch, time_step, gamma, loss_stat)
+            self.learn(batch, gamma, loss_stat)
 
             loss_stats = MPI.COMM_WORLD.gather(loss_stat)
             if MPI.COMM_WORLD.Get_rank() == 0:
@@ -186,7 +186,7 @@ class Learner:
                         "success_count": success_count
                     }, filename=checkpoint_to_save)
 
-    def learn(self, batches, time_step, gamma, loss_stat):
+    def learn(self, batches, gamma, loss_stat):
         for id in self.agent_ids:
             for batch in batches[id]:
                 hidden_batch, cell_batch, out_batch = self.main_model[id].lstm.init_hidden_states_and_outputs(
