@@ -134,7 +134,7 @@ class Learner:
                 batches = self._memory.get_batch(bsize=batch_size, num_learner=MPI.COMM_WORLD.Get_size(), num_batch=1,
                                                  time_step=time_step)
             batch = MPI.COMM_WORLD.scatter(batches)
-            self.learn(batch, gamma, loss_stat)
+            self.learn(batch, time_step, gamma, loss_stat)
 
             loss_stats = MPI.COMM_WORLD.gather(loss_stat)
             if MPI.COMM_WORLD.Get_rank() == 0:
@@ -186,44 +186,40 @@ class Learner:
                         "success_count": success_count
                     }, filename=checkpoint_to_save)
 
-    def learn(self, batches, gamma, loss_stat):
+    def learn(self, batches, time_step, gamma, loss_stat):
         for id in self.agent_ids:
             for batch in batches[id]:
-                hidden_state, cell_state, out = self.main_model[id].lstm.init_hidden_states_and_outputs(
-                    bsize=1)
-                hidden_state=hidden_state.to(self.device)
-                cell_state=cell_state.to(self.device)
-                out=out.to(self.device)
-                hidden_state_target, cell_state_target, out_target = self.main_model[id].lstm.init_hidden_states_and_outputs(
-                    bsize=1)
-                hidden_state_target = hidden_state_target.to(self.device)
-                cell_state_target = cell_state_target.to(self.device)
-                out_target = out_target.to(self.device)
+                hidden_batch, cell_batch, out_batch = self.main_model[id].lstm.init_hidden_states_and_outputs(
+                    bsize=len(batch))
+                hidden_batch=hidden_batch.to(self.device)
+                cell_batch=cell_batch.to(self.device)
+                out_batch=out_batch.to(self.device)
                 act, current_vector_obs, current_visual_obs, next_vector_obs, next_visual_obs, rewards = self.preprocess_data_from_batch(
                     batch)
 
-                Q_s_a=[]
-                target_values=[]
+                Q_next_max = torch.zeros(len(batch)).float().to(self.device)
+                Q_s_a=torch.zeros(len(batch)).float().to(self.device)
+                target_values=torch.zeros(len(batch)).float().to(self.device)
                 for batch_idx in range(len(batch)):
                     act_per_episode, current_visual_obs_per_episode, rewards_per_episode, visual_obs_per_episode = self.extract_input_per_episode(
                         act, batch_idx, current_vector_obs, current_visual_obs, next_vector_obs, next_visual_obs,
                         rewards)
-
-                    for t in range(len(batch[batch_idx])):
-                        out_target, (hidden_state_target, cell_state_target), Q_next, _, _ = self.target_model[id](visual_obs_per_episode[:,t:t+2],
-                                                                   act_per_episode[:,t:t+1],
-                                                                   hidden_state=hidden_state_target,
-                                                                   cell_state=cell_state_target,
-                                                                   lstm_out=out_target)
-                        Q_next_max = torch.max(Q_next.reshape(-1))
-                        out, (hidden_state, cell_state), Q_s, _, _ = self.main_model[id](current_visual_obs_per_episode[:,t:t+1], act_per_episode[:,t:t+1],
-                                                              hidden_state=hidden_state, cell_state=cell_state,
-                                                              lstm_out=out)
-                        # Only one action to be selected since the action is known
-                        Q_s_a.append(Q_s[0, 0, 0])
-                        target_values.append(rewards_per_episode[t] + (gamma * Q_next_max))
-                Q_s_a=torch.stack(Q_s_a)
-                target_values = torch.stack(target_values)
+                    _, _, Q_next, _, _ = self.target_model[id](visual_obs_per_episode,
+                                                               act_per_episode,
+                                                               hidden_state=hidden_batch[
+                                                                            batch_idx:batch_idx + 1],
+                                                               cell_state=cell_batch[
+                                                                          batch_idx:batch_idx + 1],
+                                                               lstm_out=out_batch[
+                                                                        batch_idx:batch_idx + 1])
+                    Q_next_max[batch_idx] = torch.max(Q_next.reshape(-1))
+                    _, _, Q_s, _, _ = self.main_model[id](current_visual_obs_per_episode, act_per_episode,
+                                                          hidden_state=hidden_batch[batch_idx:batch_idx + 1], cell_state=cell_batch[batch_idx:batch_idx + 1],
+                                                          lstm_out=out_batch[batch_idx:batch_idx + 1])
+                    # Only one action to select since the action is known
+                    Q_s_a[batch_idx] = Q_s[0, 0, 0]
+                    target_values[batch_idx] = rewards_per_episode[time_step - 1] + (gamma * Q_next_max[batch_idx])
+                target_values = target_values.float()
 
 
                 loss = self.criterion(Q_s_a, target_values)
