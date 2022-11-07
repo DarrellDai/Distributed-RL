@@ -240,6 +240,8 @@ class Learner:
                 sync_grads(self.main_model[id])
                 # update params
                 self.optimizer[id].step()
+                # release memory
+                torch.cuda.empty_cache()
 
     def preprocess_data_from_batch(self, batch):
         current_visual_obs = []
