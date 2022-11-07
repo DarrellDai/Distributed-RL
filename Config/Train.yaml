@@ -7,7 +7,7 @@ device_idx: [4,5,6,7]
 resume: False
 total_epochs: 20000
 max_steps: 100
-batch_size: 25
+batch_size: 20
 time_step: 16
 learning_rate: 0.00025
 gamma: 0.99
