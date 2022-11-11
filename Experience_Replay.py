@@ -41,7 +41,7 @@ class Memory():
                         try:
                             point = np.random.randint(0, len(self.replay_buffer[id][sampled_idx[
                                 learner_idx, batch_idx, idx_in_batch]]) + 1 - time_step)
-                            buffer.append(self.replay_buffer[id][sampled_idx[idx_in_batch]][point:point + time_step])
+                            buffer.append(self.replay_buffer[id][sampled_idx[learner_idx, batch_idx, idx_in_batch]][point:point + time_step])
                         except:
                             buffer.append(self.replay_buffer[id][sampled_idx[learner_idx, batch_idx, idx_in_batch]])
                     batches[learner_idx][id].append(buffer)
