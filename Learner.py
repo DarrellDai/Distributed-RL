@@ -88,7 +88,7 @@ class Learner:
         if resume:
             if MPI.COMM_WORLD.Get_rank() == 0:
                 model_state_dicts, optimizer_state_dicts, episode_count, self.epsilon, self.initial_epoch_count, success_count = load_checkpoint(
-                    checkpoint_to_load, self.device)
+                    checkpoint_to_load+".pth.tar", self.device)
                 # print("episode_count")
                 self._connect.set("episode_count", cPickle.dumps(episode_count))
                 # print("Sending epsilon")
@@ -184,7 +184,7 @@ class Learner:
                         "episode_count": episode_count,
                         "epoch_count": epoch,
                         "success_count": success_count
-                    }, filename=checkpoint_to_save)
+                    }, filename=checkpoint_to_save+"_"+str(epoch + 1)+".pth.tar")
 
     def learn(self, batches, gamma, loss_stat):
         for id in self.agent_ids:
@@ -233,6 +233,7 @@ class Learner:
                 # backward
                 loss.backward()
 
+                # Synchronize gradients from all learners
                 sync_grads(self.main_model[id])
                 # update params
                 self.optimizer[id].step()
