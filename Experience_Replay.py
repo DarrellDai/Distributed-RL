@@ -23,26 +23,28 @@ class Memory():
         self.check_dimension()
 
     # Todo: Change to accept episodes with all length, so some short episode can also be learned
-    def get_batch(self, bsize, num_batch, num_learner, time_step):
+    def get_batch(self, bsize, num_batch, num_learners, time_step):
         self.check_dimension()
-        self.check_total_num_vs_needed_for_batch(bsize, num_batch, num_learner)
+        self.check_total_num_vs_needed_for_batch(bsize, num_batch, num_learners)
         batches = []
-        for i in range(num_learner):
+        for idx_in_batch in range(num_learners):
             batches.append({})
             for id in self.agent_ids:
-                batches[i][id] = []
-        sampled_idx = random.sample(range(len(self)),
-                                    min(num_batch*bsize, len(self)))
-        for batch in batches:
+                batches[idx_in_batch][id] = []
+        sampled_idx = random.sample(range(len(self)), bsize * num_batch * num_learners)
+        sampled_idx = np.array(sampled_idx).reshape((num_learners, num_batch, bsize))
+        for learner_idx in range(num_learners):
             for id in self.agent_ids:
-                buffer=[]
-                for i in range(bsize):
-                    try:
-                        point = np.random.randint(0, len(self.replay_buffer[id][sampled_idx[i]]) + 1 - time_step)
-                        buffer.append(self.replay_buffer[id][sampled_idx[i]][point:point + time_step])
-                    except:
-                        buffer.append(self.replay_buffer[id][sampled_idx[i]])
-                batch[id].append(buffer)
+                for batch_idx in range(num_batch):
+                    buffer = []
+                    for idx_in_batch in range(bsize):
+                        try:
+                            point = np.random.randint(0, len(self.replay_buffer[id][sampled_idx[
+                                learner_idx, batch_idx, idx_in_batch]]) + 1 - time_step)
+                            buffer.append(self.replay_buffer[id][sampled_idx[idx_in_batch]][point:point + time_step])
+                        except:
+                            buffer.append(self.replay_buffer[id][sampled_idx[learner_idx, batch_idx, idx_in_batch]])
+                    batches[learner_idx][id].append(buffer)
         return batches
 
     def check_dimension(self):
@@ -51,9 +53,11 @@ class Memory():
                 for t in episode:
                     if len(t[0][0].shape) != 3:
                         raise RuntimeError("The dimension of the visual observation is wrong")
+
     def check_total_num_vs_needed_for_batch(self, bsize, num_batch, num_learners):
-        if bsize*num_batch*num_learners>len(self):
+        if bsize * num_batch * num_learners > len(self):
             raise RuntimeError("Memory is not enough for making the batches")
+
     def __len__(self):
         return len(self.replay_buffer[self.agent_ids[0]])
 
