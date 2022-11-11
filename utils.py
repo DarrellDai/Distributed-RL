@@ -141,7 +141,7 @@ def sync_grads(network):
     flat_grads = _get_flat_grads(network)
     global_grads = np.zeros_like(flat_grads)
     MPI.COMM_WORLD.Allreduce(flat_grads, global_grads, op=MPI.SUM)
-    _set_flat_grads(network, global_grads)
+    _set_flat_grads(network, global_grads/MPI.COMM_WORLD.Get_size())
 
 
 # get the flat grads or params
