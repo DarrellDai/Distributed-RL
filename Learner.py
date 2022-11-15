@@ -1,21 +1,21 @@
-import numpy as np
-import torch.nn as nn
-import torch
-from torch.utils.tensorboard import SummaryWriter
-
-import redis
-from mpi4py import MPI
+import _pickle as cPickle
+import argparse
 import os
 import time
 from copy import deepcopy
-from tqdm import tqdm
-import _pickle as cPickle
-import yaml
-import argparse
 
+import numpy as np
+import redis
+import torch
+import torch.nn as nn
+import yaml
+from mpi4py import MPI
+from torch.utils.tensorboard import SummaryWriter
+from tqdm import tqdm
+
+from Experience_Replay import Distributed_Memory
 from utils import initialize_model, save_checkpoint, load_checkpoint, wait_until_present, sync_grads, \
     calculate_loss_from_all_loss_stats
-from Experience_Replay import Distributed_Memory
 
 
 class Learner:
@@ -37,7 +37,7 @@ class Learner:
             self._connect.delete("Update params")
             self._connect.delete("Update Experience")
 
-        if device_idx==-1:
+        if device_idx == -1:
             self.device = torch.device('cpu')
         else:
             if not torch.cuda.is_available():
@@ -88,7 +88,7 @@ class Learner:
         if resume:
             if MPI.COMM_WORLD.Get_rank() == 0:
                 model_state_dicts, optimizer_state_dicts, episode_count, self.epsilon, self.initial_epoch_count, success_count = load_checkpoint(
-                    checkpoint_to_load+".pth.tar", self.device)
+                    checkpoint_to_load + ".pth.tar", self.device)
                 # print("episode_count")
                 self._connect.set("episode_count", cPickle.dumps(episode_count))
                 # print("Sending epsilon")
@@ -150,7 +150,7 @@ class Learner:
                     # print("Learner got episode_count")
                 if (epoch + 1) % performance_display_interval == 0:
                     print('\n Epoch: [%d | %d] LR: %f Epsilon : %f \n' % (
-                    epoch, total_epochs, learning_rate, self.epsilon))
+                        epoch, total_epochs, learning_rate, self.epsilon))
                     for id in self.agent_ids:
                         print('\n Agent %d, Loss: %f \n' % (id, loss[id]))
                 for id in self.agent_ids:
@@ -184,24 +184,24 @@ class Learner:
                         "episode_count": episode_count,
                         "epoch_count": epoch,
                         "success_count": success_count
-                    }, filename=checkpoint_to_save+"_"+str(epoch + 1)+".pth.tar")
+                    }, filename=checkpoint_to_save + "_" + str(epoch + 1) + ".pth.tar")
 
     def learn(self, batches, gamma, loss_stat):
         for id in self.agent_ids:
             for batch in batches[id]:
                 hidden_batch, cell_batch, out_batch = self.main_model[id].lstm.init_hidden_states_and_outputs(
                     bsize=len(batch))
-                hidden_batch=hidden_batch.to(self.device)
-                cell_batch=cell_batch.to(self.device)
-                out_batch=out_batch.to(self.device)
+                hidden_batch = hidden_batch.to(self.device)
+                cell_batch = cell_batch.to(self.device)
+                out_batch = out_batch.to(self.device)
                 act, current_vector_obs, current_visual_obs, next_vector_obs, next_visual_obs, rewards = self.preprocess_data_from_batch(
                     batch)
 
                 Q_next_max = torch.zeros(len(batch)).float().to(self.device)
-                Q_s_a=torch.zeros(len(batch)).float().to(self.device)
-                target_values=torch.zeros(len(batch)).float().to(self.device)
+                Q_s_a = torch.zeros(len(batch)).float().to(self.device)
+                target_values = torch.zeros(len(batch)).float().to(self.device)
                 for batch_idx in range(len(batch)):
-                    act_per_episode, current_visual_obs_per_episode, rewards_per_episode, visual_obs_per_episode = self.extract_input_per_episode(
+                    act_per_episode, current_visual_obs_per_episode, current_vector_obs_per_episode, rewards_per_episode, visual_obs_per_episode, next_vector_obs_per_episode = self.extract_input_per_episode(
                         act, batch_idx, current_vector_obs, current_visual_obs, next_vector_obs, next_visual_obs,
                         rewards)
                     _, _, Q_next, _, _ = self.target_model[id](visual_obs_per_episode,
@@ -212,15 +212,19 @@ class Learner:
                                                                           batch_idx:batch_idx + 1],
                                                                lstm_out=out_batch[
                                                                         batch_idx:batch_idx + 1])
-                    Q_next_max[batch_idx] = torch.max(Q_next.reshape(-1))
+                    # The Q is 0 if agent is dead
+                    if next_vector_obs_per_episode[-1][0] == 1:
+                        Q_next_max[batch_idx] = torch.max(Q_next.reshape(-1))
+                    else:
+                        Q_next_max[batch_idx] = 0
                     _, _, Q_s, _, _ = self.main_model[id](current_visual_obs_per_episode, act_per_episode,
-                                                          hidden_state=hidden_batch[batch_idx:batch_idx + 1], cell_state=cell_batch[batch_idx:batch_idx + 1],
+                                                          hidden_state=hidden_batch[batch_idx:batch_idx + 1],
+                                                          cell_state=cell_batch[batch_idx:batch_idx + 1],
                                                           lstm_out=out_batch[batch_idx:batch_idx + 1])
                     # Only one action to select since the action is known
                     Q_s_a[batch_idx] = Q_s[0, 0, 0]
                     target_values[batch_idx] = rewards_per_episode[-1] + (gamma * Q_next_max[batch_idx])
                 target_values = target_values.float()
-
 
                 loss = self.criterion(Q_s_a, target_values)
 
@@ -264,7 +268,8 @@ class Learner:
             next_vector_obs.append(nves)
         return act, current_vector_obs, current_visual_obs, next_vector_obs, next_visual_obs, rewards
 
-    def extract_input_per_episode(self, act, batch_idx, current_vector_obs, current_visual_obs, next_vector_obs, next_visual_obs,
+    def extract_input_per_episode(self, act, batch_idx, current_vector_obs, current_visual_obs, next_vector_obs,
+                                  next_visual_obs,
                                   rewards):
         current_visual_obs_per_episode = np.array(current_visual_obs[batch_idx])
         current_vector_obs_per_episode = np.array(current_vector_obs[batch_idx])
@@ -279,7 +284,7 @@ class Learner:
         act_per_episode = torch.from_numpy(act_per_episode).long().to(self.device).unsqueeze(0)
         rewards_per_episode = torch.from_numpy(rewards_per_episode).float().to(self.device)
         visual_obs_per_episode = torch.concat((current_visual_obs_per_episode, next_visual_obs_per_episode[:, -1:]), 1)
-        return act_per_episode, current_visual_obs_per_episode, rewards_per_episode, visual_obs_per_episode
+        return act_per_episode, current_visual_obs_per_episode, current_vector_obs_per_episode, rewards_per_episode, visual_obs_per_episode, next_vector_obs_per_episode
 
 
 if __name__ == "__main__":
