@@ -599,27 +599,16 @@ class MultiUnityWrapper():
         n_vis_obs = self._get_n_vis_obs()
 
         for behaviour_name, info in info_dict.items():
-            default_observation = None
-            if self._allow_multiple_obs:
-                visual_obs = self._get_vis_obs_list(info)
-                visual_obs_list = []
-                for obs in visual_obs:
-                    if len(obs) > 0:
-                        visual_obs_list.append(self._preprocess_single(obs[0]))
-                default_observation = visual_obs_list
-                if vec_obs_size[behaviour_name] >= 1:
-                    default_observation.append(
-                        self._get_vector_obs(info))
-            else:
-                if n_vis_obs[behaviour_name] >= 1:
-                    visual_obs = self._get_vis_obs_list(info)
-                    if len(visual_obs[0]) > 0:
-                        default_observation = self._preprocess_single(
-                            visual_obs[0][0])
-                else:
-                    obs_dict.update(self._get_vector_obs(
-                        info))
+            default_observation = []
+            visual_obs = self._get_vis_obs_list(info)
+            visual_obs_dict={}
 
+            for key, obs in visual_obs.items():
+                visual_obs_dict[key]=self._preprocess_single(obs)
+            default_observation.append(visual_obs_dict)
+            if vec_obs_size[behaviour_name] >= 1:
+                default_observation.append(
+                    self._get_vector_obs(info))
             done = isinstance(info, TerminalSteps)
             for agent_id in info.agent_id:
                 # Add reward and done
@@ -627,7 +616,7 @@ class MultiUnityWrapper():
                 reward_dict[agent_id] = info.reward[agent_index]
                 done_dict[agent_id] = done
                 if default_observation is not None:
-                    obs_dict[agent_id] = default_observation
+                    obs_dict[agent_id] = [default_observation[0][agent_id], default_observation[1][agent_id]]
 
         return (obs_dict, reward_dict, done_dict, info)
 
@@ -660,12 +649,13 @@ class MultiUnityWrapper():
 
     def _get_vis_obs_list(
             self, step_result: Union[DecisionSteps, TerminalSteps]
-    ) -> List[np.ndarray]:
-        result: List[np.ndarray] = []
-        for obs in step_result.obs:
-            if len(obs.shape) == 4:
-                result.append(obs)
-        return result
+    ) -> Dict[str, np.ndarray]:
+        visual_obs_dict={}
+        for agents_obs in step_result.obs:
+            if len(agents_obs.shape) == 4:
+                for agent_id, obs_idx in zip(step_result.agent_id, range(len(agents_obs))):
+                    visual_obs_dict[agent_id] = agents_obs[obs_idx]
+        return visual_obs_dict
 
     def _get_vector_obs(
             self, step_result: Union[DecisionSteps, TerminalSteps]

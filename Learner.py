@@ -251,11 +251,11 @@ class Learner:
             cvis, cves, ac, rw, nvis, nves = [], [], [], [], [], []
             for element in b:
                 cvis.append(element[0][0])
-                cves.append(element[0][1][list(element[0][1].keys())[0]])
+                cves.append(element[0][1])
                 ac.append(element[1])
                 rw.append(element[2])
                 nvis.append(element[3][0])
-                nves.append(element[3][1][list(element[0][1].keys())[0]])
+                nves.append(element[3][1])
             current_visual_obs.append(cvis)
             current_vector_obs.append(cves)
             act.append(ac)
