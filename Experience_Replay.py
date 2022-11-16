@@ -18,8 +18,16 @@ class Memory():
             self.replay_buffer[id] = deque(maxlen=self.memsize)
 
     def add_episode(self, episodes):
+        clip_flag=False
         for id in self.agent_ids:
-            self.replay_buffer[id].append(episodes[id])
+            for t in range(len(episodes[id])):
+                if episodes[id][t][0][1][id][0] == 0:
+                    clip_flag=True
+                    break
+            if clip_flag:
+                self.replay_buffer[id].append(episodes[id][:t])
+            else:
+                self.replay_buffer[id].append(episodes[id])
         self.check_dimension()
 
     # Todo: Change to accept episodes with all length, so some short episode can also be learned
@@ -41,7 +49,8 @@ class Memory():
                         try:
                             point = np.random.randint(0, len(self.replay_buffer[id][sampled_idx[
                                 learner_idx, batch_idx, idx_in_batch]]) + 1 - time_step)
-                            buffer.append(self.replay_buffer[id][sampled_idx[learner_idx, batch_idx, idx_in_batch]][point:point + time_step])
+                            buffer.append(self.replay_buffer[id][sampled_idx[learner_idx, batch_idx, idx_in_batch]][
+                                          point:point + time_step])
                         except:
                             buffer.append(self.replay_buffer[id][sampled_idx[learner_idx, batch_idx, idx_in_batch]])
                     batches[learner_idx][id].append(buffer)
