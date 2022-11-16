@@ -156,6 +156,7 @@ class Actor:
                     lstm_out[id]=lstm_out[id].to(self.device)
                 step_count += 1
                 with torch.no_grad():
+                    #todo:check this lock
                     with threading.Lock():
                         if np.random.rand(1) < epsilon:
 

@@ -1,12 +1,14 @@
-from Network import Network
-import numpy as np
-import pickle
-import torch
 import os
+import pickle
 import re
-import torch.nn as nn
 import time
+
+import numpy as np
+import torch
+import torch.nn as nn
 from mpi4py import MPI
+
+from Network import Network
 
 
 def initialize_model(agent_ids, cnn_out_size, lstm_hidden_size, action_shape, action_out_size, atten_size, device):
@@ -86,6 +88,13 @@ def convert_to_array(object):
     return object
 
 
+def preprocess_episode(episode):
+    processed_episode = []
+    for i in range(len(episode) - 1):
+        processed_episode.append((episode[i][0], episode[i][1], episode[i + 1][2], episode[i][3]))
+    return processed_episode
+
+
 def save_obj(obj, name):
     if not os.path.exists("data"):
         os.mkdir("data")
@@ -141,7 +150,7 @@ def sync_grads(network):
     flat_grads = _get_flat_grads(network)
     global_grads = np.zeros_like(flat_grads)
     MPI.COMM_WORLD.Allreduce(flat_grads, global_grads, op=MPI.SUM)
-    _set_flat_grads(network, global_grads/MPI.COMM_WORLD.Get_size())
+    _set_flat_grads(network, global_grads / MPI.COMM_WORLD.Get_size())
 
 
 # get the flat grads or params

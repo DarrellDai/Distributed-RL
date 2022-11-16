@@ -1,21 +1,21 @@
-import numpy as np
-import torch.nn as nn
-import torch
-from torch.utils.tensorboard import SummaryWriter
-
-import redis
-from mpi4py import MPI
+import _pickle as cPickle
+import argparse
 import os
 import time
 from copy import deepcopy
-from tqdm import tqdm
-import _pickle as cPickle
-import yaml
-import argparse
 
+import numpy as np
+import redis
+import torch
+import torch.nn as nn
+import yaml
+from mpi4py import MPI
+from torch.utils.tensorboard import SummaryWriter
+from tqdm import tqdm
+
+from Experience_Replay import Distributed_Memory
 from utils import initialize_model, save_checkpoint, load_checkpoint, wait_until_present, sync_grads, \
     calculate_loss_from_all_loss_stats
-from Experience_Replay import Distributed_Memory
 
 
 class Learner:
@@ -131,7 +131,7 @@ class Learner:
             for id in self.agent_ids:
                 loss_stat[id] = []
             if MPI.COMM_WORLD.Get_rank() == 0:
-                batches = self._memory.get_batch(bsize=batch_size, num_learner=MPI.COMM_WORLD.Get_size(), num_batch=1,
+                batches = self._memory.get_batch(bsize=batch_size, num_learner=MPI.COMM_WORLD.Get_size(), num_batch=2,
                                                  time_step=time_step)
             batch = MPI.COMM_WORLD.scatter(batches)
             self.learn(batch, gamma, loss_stat)
@@ -191,10 +191,11 @@ class Learner:
             for batch in batches[id]:
                 hidden_state, cell_state, out = self.main_model[id].lstm.init_hidden_states_and_outputs(
                     bsize=1)
-                hidden_state=hidden_state.to(self.device)
-                cell_state=cell_state.to(self.device)
-                out=out.to(self.device)
-                hidden_state_target, cell_state_target, out_target = self.main_model[id].lstm.init_hidden_states_and_outputs(
+                hidden_state = hidden_state.to(self.device)
+                cell_state = cell_state.to(self.device)
+                out = out.to(self.device)
+                hidden_state_target, cell_state_target, out_target = self.main_model[
+                    id].lstm.init_hidden_states_and_outputs(
                     bsize=1)
                 hidden_state_target = hidden_state_target.to(self.device)
                 cell_state_target = cell_state_target.to(self.device)
@@ -202,27 +203,32 @@ class Learner:
                 act, current_vector_obs, current_visual_obs, next_vector_obs, next_visual_obs, rewards = self.preprocess_data_from_batch(
                     batch)
 
-                Q_s_a=[]
-                target_values=[]
+                Q_s_a = []
+                target_values = []
                 for batch_idx in range(len(batch)):
                     act_per_episode, current_visual_obs_per_episode, current_vector_obs_per_episode, rewards_per_episode, visual_obs_per_episode, next_vector_obs_per_episode = self.extract_input_per_episode(
                         act, batch_idx, current_vector_obs, current_visual_obs, next_vector_obs, next_visual_obs,
                         rewards)
 
                     for t in range(len(batch[batch_idx])):
-                        out_target, (hidden_state_target, cell_state_target), Q_next, _, _ = self.target_model[id](visual_obs_per_episode[:,t:t+2],
-                                                                   act_per_episode[:,t:t+1],
-                                                                   hidden_state=hidden_state_target,
-                                                                   cell_state=cell_state_target,
-                                                                   lstm_out=out_target)
-                        Q_next_max = torch.max(Q_next.reshape(-1))
-                        out, (hidden_state, cell_state), Q_s, _, _ = self.main_model[id](current_visual_obs_per_episode[:,t:t+1], act_per_episode[:,t:t+1],
-                                                              hidden_state=hidden_state, cell_state=cell_state,
-                                                              lstm_out=out)
+                        if next_vector_obs_per_episode[t][0] == 0:
+                                Q_next_max = 0
+                        else:
+                            out_target, (hidden_state_target, cell_state_target), Q_next, _, _ = self.target_model[id](
+                                visual_obs_per_episode[:, t:t + 2],
+                                act_per_episode[:, t:t + 1],
+                                hidden_state=hidden_state_target,
+                                cell_state=cell_state_target,
+                                lstm_out=out_target)
+                            Q_next_max = torch.max(Q_next.reshape(-1))
+                        out, (hidden_state, cell_state), Q_s, _, _ = self.main_model[id](
+                            current_visual_obs_per_episode[:, t:t + 1], act_per_episode[:, t:t + 1],
+                            hidden_state=hidden_state, cell_state=cell_state,
+                            lstm_out=out)
                         # Only one action to be selected since the action is known
                         Q_s_a.append(Q_s[0, 0, 0])
                         target_values.append(rewards_per_episode[t] + (gamma * Q_next_max))
-                Q_s_a=torch.stack(Q_s_a)
+                Q_s_a = torch.stack(Q_s_a)
                 target_values = torch.stack(target_values)
 
                 loss = self.criterion(Q_s_a, target_values)

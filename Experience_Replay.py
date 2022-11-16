@@ -3,6 +3,7 @@ import random
 import threading
 import time
 from collections import deque
+from utils import preprocess_episode
 
 import numpy as np
 import redis
@@ -21,13 +22,13 @@ class Memory():
         clip_flag=False
         for id in self.agent_ids:
             for t in range(len(episodes[id])):
-                if episodes[id][t][0][1][id][0] == 0:
+                if episodes[id][t][0][1][0] == 0:
                     clip_flag=True
                     break
             if clip_flag:
-                self.replay_buffer[id].append(episodes[id][:t])
+                self.replay_buffer[id].append(preprocess_episode(episodes[id][:t+1]))
             else:
-                self.replay_buffer[id].append(episodes[id])
+                self.replay_buffer[id].append(preprocess_episode(episodes[id]))
         self.check_dimension()
 
     # Todo: Change to accept episodes with all length, so some short episode can also be learned
@@ -49,8 +50,10 @@ class Memory():
                         try:
                             point = np.random.randint(0, len(self.replay_buffer[id][sampled_idx[
                                 learner_idx, batch_idx, idx_in_batch]]) + 1 - time_step)
+                            # buffer.append(self.replay_buffer[id][sampled_idx[learner_idx, batch_idx, idx_in_batch]][
+                            #               point:point + time_step])
                             buffer.append(self.replay_buffer[id][sampled_idx[learner_idx, batch_idx, idx_in_batch]][
-                                          point:point + time_step])
+                                          -time_step:])
                         except:
                             buffer.append(self.replay_buffer[id][sampled_idx[learner_idx, batch_idx, idx_in_batch]])
                     batches[learner_idx][id].append(buffer)
