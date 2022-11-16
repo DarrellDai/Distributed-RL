@@ -88,12 +88,6 @@ def convert_to_array(object):
     return object
 
 
-def preprocess_episode(episode):
-    processed_episode = []
-    for i in range(len(episode) - 1):
-        processed_episode.append((episode[i][0], episode[i][1], episode[i + 1][2], episode[i][3]))
-    return processed_episode
-
 
 def save_obj(obj, name):
     if not os.path.exists("data"):
