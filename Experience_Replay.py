@@ -21,6 +21,9 @@ class Memory():
         clip_flag=False
         for id in self.agent_ids:
             for t in range(len(episodes[id])):
+                if episodes[id][t][2]== -1:
+                    if episodes[id][t][0][1][0]==episodes[id][t][3][1][0]:
+                        raise RuntimeError("The agent is dead, but still showing alive in its observation")
                 if episodes[id][t][0][1][0] == 0:
                     clip_flag=True
                     break
