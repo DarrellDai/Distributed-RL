@@ -34,6 +34,7 @@ class Learner:
             self._connect.delete("epoch")
             self._connect.delete("experience")
             self._connect.delete("Update")
+            self._connect.delete("to_update")
             self._connect.delete("Update params")
             self._connect.delete("Update Experience")
 
@@ -126,6 +127,7 @@ class Learner:
             counter = range(self.initial_epoch_count, total_epochs)
         loss_stat = {}
         batches = None
+
         for epoch in counter:
             for id in self.agent_ids:
                 loss_stat[id] = []
@@ -164,6 +166,7 @@ class Learner:
                 if epoch % actor_update_freq == 0:
                     with self._connect.lock("Update params"):
                         self._connect.set("params", cPickle.dumps(self.get_model_state_dict()))
+                        self._connect.set("to_update", cPickle.dumps(True))
                 if self.epsilon > final_epsilon:
                     self.epsilon *= epsilon_vanish_rate
 

@@ -98,6 +98,8 @@ class Actor:
         return act, hidden_state, cell_state, lstm_out
 
     def collect_data(self, env, max_steps, name_tensorboard, actor_update_freq, actor_idx, mode):
+        if actor_idx==0:
+            self._connect.set("to_update", cPickle.dumps(False))
         memory = Memory(self.memory_size, self.agent_ids)
         writer = SummaryWriter(os.path.join("runs", name_tensorboard))
         total_reward = {}
@@ -110,7 +112,7 @@ class Actor:
             wait_until_present(self._connect, "epsilon")
             epsilon = cPickle.loads(self._connect.get("epsilon"))
             # print("Actor {} got epsilon".format(self.actor_idx))
-            prev_epoch = -1
+            prev_epoch = 0
         else:
             epsilon = 0
 
@@ -188,13 +190,15 @@ class Actor:
                     self._connect.set("epsilon", cPickle.dumps(epsilon))
                     wait_until_present(self._connect, "epoch")
                     epoch = cPickle.loads(self._connect.get("epoch"))
-                    # print("Actor {} got epoch".format(self.actor_idx))
+                    to_update = cPickle.loads(self._connect.get("to_update"))
                     for id in self.agent_ids:
                         writer.add_scalar(self.id_to_name[id] + ": Reward vs Episode", total_reward[id], episode_count)
                     writer.flush()
 
-                if epoch % actor_update_freq == 0 and prev_epoch != epoch and actor_idx == 0:
+
+                if to_update and actor_idx == 0:
                     self._pull_params()
+                    self._connect.set("to_update", cPickle.dumps(False))
 
                 prev_epoch = epoch
 
