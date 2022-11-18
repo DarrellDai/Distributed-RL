@@ -28,7 +28,7 @@ class Memory():
                     clip_flag=True
                     break
             if clip_flag:
-                self.replay_buffer[id].append(episodes[id][:t+1])
+                self.replay_buffer[id].append(episodes[id][:t])
             else:
                 self.replay_buffer[id].append(episodes[id])
         self.check_dimension()
