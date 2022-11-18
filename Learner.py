@@ -24,8 +24,9 @@ class Learner:
         self.memory_size = memsize
         self.device_idx = device_idx
         self.epsilon = epsilon
+        self.instance_idx=instance_idx
         if MPI.COMM_WORLD.Get_rank() == 0:
-            self._connect = redis.Redis(host=hostname,db=instance_idx)
+            self._connect = redis.Redis(host=hostname,db=self.instance_idx)
             self._connect.delete("id_to_name")
             self._connect.delete("params")
             self._connect.delete("epsilon")
@@ -120,7 +121,7 @@ class Learner:
               total_epochs, actor_update_freq, target_update_freq,
               performance_display_interval, checkpoint_save_interval, checkpoint_to_save):
         if MPI.COMM_WORLD.Get_rank() == 0:
-            writer = SummaryWriter(os.path.join("runs", name_tensorboard))
+            writer = SummaryWriter(os.path.join("runs", str(self.instance_idx)+ "_" + name_tensorboard))
             self._wait_memory()
             counter = tqdm(range(self.initial_epoch_count, total_epochs))
         else:
@@ -186,7 +187,7 @@ class Learner:
                         "episode_count": episode_count,
                         "epoch_count": epoch,
                         "success_count": success_count
-                    }, filename=checkpoint_to_save + "_" + str(epoch + 1) + ".pth.tar")
+                    }, filename=str(self.instance_idx)+ "_" + checkpoint_to_save + "_" + str(epoch + 1) + ".pth.tar")
 
     def learn(self, batches, gamma, loss_stat):
         for id in self.agent_ids:

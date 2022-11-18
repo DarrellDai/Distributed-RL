@@ -102,7 +102,7 @@ class Actor:
         if actor_idx==0:
             self._connect.set("to_update", cPickle.dumps(False))
         memory = Memory(self.memory_size, self.agent_ids)
-        writer = SummaryWriter(os.path.join("runs", name_tensorboard))
+        writer = SummaryWriter(os.path.join("runs", str(self.instance_idx)+ "_" + name_tensorboard))
         total_reward = {}
         local_memory = {}
         hidden_state = {}

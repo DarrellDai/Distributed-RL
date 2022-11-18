@@ -1,6 +1,6 @@
 env_path: '../Env_Linux_Nav_3_Seekers_Big_Rocks_No_Waiting_Time'
 checkpoint_to_load: "Checkpoint_Nav_Distributed_RL.pth.tar"
-checkpoint_to_save: "Checkpoint_Nav_Distributed_RL.pth.tar"
+checkpoint_to_save: "Checkpoint_Nav_Distributed_RL"
 name_tensorboard: "CNN_LSTM_DQN_Nav_Distributed_RL_Hider"
 memory_size: 32
 device_idx: [4]
@@ -15,6 +15,6 @@ initial_epsilon: 1.0
 final_epsilon: 0.1
 epsilon_vanish_rate: 0.999
 performance_display_interval(epochs): 5
-checkpoint_save_interval(epochs): 200
+checkpoint_save_interval(epochs): 5
 actor_update_freq(epochs): 5
 target_update_freq(epochs): 20
