@@ -11,13 +11,12 @@ from mpi4py import MPI
 from Network import Network
 
 
-def initialize_model(agent_ids, cnn_out_size, lstm_hidden_size, action_shape, action_out_size, atten_size, device):
+def initialize_model(agent_ids, cnn_out_size, lstm_hidden_size, action_shape, atten_size, device):
     main_model = {}
     for idx in range(len(agent_ids)):
         main_model[agent_ids[idx]] = Network(cnn_out_size=cnn_out_size[idx],
                                              lstm_hidden_size=lstm_hidden_size[idx],
-                                             atten_size=atten_size[idx], action_space_shape=tuple(action_shape[idx]),
-                                             action_out_size=action_out_size[idx]).to(device)
+                                             atten_size=atten_size[idx], action_space_shape=tuple(action_shape[idx])).to(device)
     return main_model
 
 

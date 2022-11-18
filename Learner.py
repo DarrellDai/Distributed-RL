@@ -57,7 +57,7 @@ class Learner:
             last_length = len(self._memory)
             time.sleep(0.1)
 
-    def initialize_model(self, cnn_out_size, lstm_hidden_size, action_shape, action_out_size, atten_size):
+    def initialize_model(self, cnn_out_size, lstm_hidden_size, action_shape, atten_size):
         self.id_to_name = None
         self.agent_ids = None
         if MPI.COMM_WORLD.Get_rank() == 0:
@@ -70,7 +70,6 @@ class Learner:
         self.id_to_name = MPI.COMM_WORLD.bcast(self.id_to_name)
         self.agent_ids = MPI.COMM_WORLD.bcast(self.agent_ids)
         self.main_model = initialize_model(self.agent_ids, cnn_out_size, lstm_hidden_size, action_shape,
-                                           action_out_size,
                                            atten_size, self.device)
 
     def get_model_state_dict(self):
@@ -214,15 +213,14 @@ class Learner:
                         if next_vector_obs_per_episode[t][0] == 0:
                                 Q_next_max = 0
                         else:
-                            out_target, (hidden_state_target, cell_state_target), Q_next, _, _ = self.target_model[id](
+                            out_target, (hidden_state_target, cell_state_target), Q_next = self.target_model[id](
                                 visual_obs_per_episode[:, t:t + 2],
-                                act_per_episode[:, t:t + 1],
                                 hidden_state=hidden_state_target,
                                 cell_state=cell_state_target,
                                 lstm_out=out_target)
                             Q_next_max = torch.max(Q_next.reshape(-1))
-                        out, (hidden_state, cell_state), Q_s, _, _ = self.main_model[id](
-                            current_visual_obs_per_episode[:, t:t + 1], act_per_episode[:, t:t + 1],
+                        out, (hidden_state, cell_state), Q_s = self.main_model[id](
+                            current_visual_obs_per_episode[:, t:t + 1],
                             hidden_state=hidden_state, cell_state=cell_state,
                             lstm_out=out)
                         # Only one action to be selected since the action is known
@@ -306,7 +304,7 @@ if __name__ == "__main__":
                       hostname=args.redisserver, device_idx=run_param["device_idx"])
     learner.initialize_model(cnn_out_size=model_param["cnn_out_size"], lstm_hidden_size=model_param["lstm_hidden_size"],
                              action_shape=model_param["action_shape"],
-                             action_out_size=model_param["action_out_size"], atten_size=model_param["atten_size"])
+                             atten_size=model_param["atten_size"])
     learner.initialize_training(learning_rate=run_param["learning_rate"], resume=run_param["resume"],
                                 checkpoint_to_load=run_param["checkpoint_to_load"])
     learner.train(batch_size=run_param["batch_size"], time_step=run_param["time_step"], gamma=run_param["gamma"],
