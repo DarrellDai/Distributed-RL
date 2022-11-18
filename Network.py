@@ -24,8 +24,6 @@ class Network(nn.Module):
     Input:
         obs(torch.Tensor): observations
             shape: (bsize, time_step, image_width, image_height, image_channel)
-        act(torch.Tensor): actions
-            shape: (bsize, time_step, action_branches)
         hidden_state(torch.Tensor)
             shape: (bsize, 1, hidden_size)
         cell_state(torch.Tensor)
@@ -39,12 +37,6 @@ class Network(nn.Module):
             shape: (bsize, 1, cell_size)
         lstm_out(torch.Tensor)
             shape: (bsize, available_atten_size, cell_size)
-        out_per_action(torch.Tensor)
-            shape: (bsize, 1, action_shape[0], action_shape[1], ..., out_size)
-        hidden_state_per_action(torch.Tensor)
-            shape: (bsize, 1, action_shape[0], action_shape[1], ..., hidden_size)
-        cell_state_per_action(torch.Tensor)
-            shape: (bsize, 1, action_shape[0], action_shape[1], ..., cell_size)
         dqn_out(torch.Tensor)
             shape: (bsize, action_shape[0], action_shape[1], ...)
     '''
