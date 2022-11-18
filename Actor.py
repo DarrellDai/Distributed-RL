@@ -26,7 +26,7 @@ class Actor:
             device_idx=[0],
             memsize=100,
             hostname="localhost",
-
+            instance_idx=0
     ):
 
         self.num_actor = num_actor
@@ -38,11 +38,12 @@ class Actor:
             if not torch.cuda.is_available():
                 raise RuntimeError("CUDA is not available, please choose CPU by setting device_idx=-1")
             self.device = torch.device('cuda:' + str(device_idx))
-        self._connect = redis.Redis(host=hostname)
+        self.instance_idx=instance_idx
+        self._connect = redis.Redis(host=hostname, db=instance_idx)
         torch.set_num_threads(10)
 
     def initialize_env(self, env_path, actor_idx):
-        unity_env = UnityEnvironment(env_path + "_" + str(actor_idx) + "/Hide and Seek", worker_id=actor_idx)
+        unity_env = UnityEnvironment(env_path + "_" + str(actor_idx) + "/Hide and Seek", worker_id=actor_idx+self.num_actor*self.instance_idx)
         env = MultiUnityWrapper(unity_env=unity_env, uint8_visual=True, allow_multiple_obs=True)
         if actor_idx == 0:
             self.id_to_name = get_agents_id_to_name(env)
@@ -225,6 +226,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Actor process for distributed reinforcement.')
     parser.add_argument('-n', '--num_actors', type=int, default=1, help='Actor number.')
     parser.add_argument('-r', '--redisserver', type=str, default='localhost', help="Redis's server name.")
+    parser.add_argument('-ins', '--instance_idx', type=int, default=0, help="The index of instance to run")
     parser.add_argument('-d', '--device', type=int, default=0, help="Index of GPU to use, -1 is CPU")
     parser.add_argument('-m', '--mode', type=str, default="train", help="Train or test mode")
     parser.add_argument('-mc', '--model_config', type=str, default='Model.yaml', help="Model config file name")
@@ -237,7 +239,7 @@ if __name__ == "__main__":
         run_param = yaml.safe_load(file)
     actor = Actor(
         num_actor=args.num_actors,
-        device_idx=args.device, memsize=run_param["memory_size"], hostname=args.redisserver)
+        device_idx=args.device, memsize=run_param["memory_size"], hostname=args.redisserver, instance_idx=args.instance_idx)
     env = actor.initialize_env(run_param["env_path"], 0)
     actor.initialize_model(cnn_out_size=model_param["cnn_out_size"], lstm_hidden_size=model_param["lstm_hidden_size"],
                            action_shape=model_param["action_shape"],

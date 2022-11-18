@@ -19,13 +19,13 @@ from utils import initialize_model, save_checkpoint, load_checkpoint, wait_until
 
 
 class Learner:
-    def __init__(self, memsize, num_actor=1, epsilon=1, hostname="localhost", device_idx=[0]):
+    def __init__(self, memsize, num_actor=1, epsilon=1, hostname="localhost", device_idx=[0], instance_idx=0):
         self.num_actor = num_actor
         self.memory_size = memsize
         self.device_idx = device_idx
         self.epsilon = epsilon
         if MPI.COMM_WORLD.Get_rank() == 0:
-            self._connect = redis.Redis(host=hostname)
+            self._connect = redis.Redis(host=hostname,db=instance_idx)
             self._connect.delete("id_to_name")
             self._connect.delete("params")
             self._connect.delete("epsilon")
@@ -303,6 +303,7 @@ class Learner:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Learner process for distributed reinforcement.')
     parser.add_argument('-r', '--redisserver', type=str, default='localhost', help="Redis's server name.")
+    parser.add_argument('-ins', '--instance_idx', type=int, default=0, help="The index of instance to run")
     parser.add_argument('-mc', '--model_config', type=str, default='Model.yaml', help="Model config file name")
     parser.add_argument('-rc', '--run_config', type=str, default='Train.yaml', help="Running config file name")
     args = parser.parse_args()
@@ -311,7 +312,7 @@ if __name__ == "__main__":
     with open("Config/" + args.run_config) as file:
         run_param = yaml.safe_load(file)
     learner = Learner(memsize=run_param["memory_size"], epsilon=run_param["initial_epsilon"],
-                      hostname=args.redisserver, device_idx=run_param["device_idx"])
+                      hostname=args.redisserver, device_idx=run_param["device_idx"], instance_idx=args.instance_idx)
     learner.initialize_model(cnn_out_size=model_param["cnn_out_size"], lstm_hidden_size=model_param["lstm_hidden_size"],
                              action_shape=model_param["action_shape"],
                              atten_size=model_param["atten_size"])
