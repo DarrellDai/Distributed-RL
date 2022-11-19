@@ -17,7 +17,6 @@ from Experience_Replay import Distributed_Memory
 from utils import initialize_model, save_checkpoint, load_checkpoint, wait_until_present, sync_grads, \
     calculate_loss_from_all_loss_stats
 
-
 class Learner:
     def __init__(self, memsize, num_actor=1, epsilon=1, hostname="localhost", device_idx=[0], instance_idx=0):
         self.num_actor = num_actor
@@ -251,8 +250,8 @@ class Learner:
                 # backward
                 loss.backward()
 
-                # Synchronize gradients from all learners
-                sync_grads(self.main_model[id])
+                # # Synchronize gradients from all learners
+                # sync_grads(self.main_model[id])
                 # update params
                 self.optimizer[id].step()
                 # release memory

@@ -98,7 +98,7 @@ class Actor:
             # lstm_out[id] = combine_out(lo, lo_new.to(self.device), self.atten_size[id])
         return act, hidden_state, cell_state, lstm_out
 
-    def collect_data(self, env, max_steps, name_tensorboard, actor_update_freq, actor_idx, mode):
+    def collect_data(self, env, max_steps, name_tensorboard, actor_idx, mode):
         if actor_idx==0:
             self._connect.set("to_update", cPickle.dumps(False))
         memory = Memory(self.memory_size, self.agent_ids)
@@ -113,7 +113,6 @@ class Actor:
             wait_until_present(self._connect, "epsilon")
             epsilon = cPickle.loads(self._connect.get("epsilon"))
             # print("Actor {} got epsilon".format(self.actor_idx))
-            prev_epoch = 0
         else:
             epsilon = 0
 
@@ -150,7 +149,10 @@ class Actor:
 
                     done = done_dict["__all__"]
 
+
                     for id in self.agent_ids:
+                        if reward_dict[id]==-1:
+                            done=True
                         total_reward[id] += reward_dict[id]
 
                         prev_obs[id][0] = prev_obs[id][0].reshape(prev_obs[id][0].shape[2], prev_obs[id][0].shape[3],
@@ -201,7 +203,6 @@ class Actor:
                     self._pull_params()
                     self._connect.set("to_update", cPickle.dumps(False))
 
-                prev_epoch = epoch
 
     def _pull_params(self):
         wait_until_present(self._connect, "params")
@@ -213,13 +214,13 @@ class Actor:
                     self.model[id].load_state_dict(cPickle.loads(params)[id])
                     self.model[id].to(self.device)
 
-    def run(self, seed, env, env_path, actor_idx, max_steps, name_tensorboard, actor_update_freq, mode):
+    def run(self, seed, env, env_path, actor_idx, max_steps, name_tensorboard, mode):
         random.seed(seed)
         if actor_idx != 0:
             env = self.initialize_env(env_path, actor_idx)
         self.collect_data(env=env, max_steps=max_steps,
                           name_tensorboard=name_tensorboard,
-                          actor_update_freq=actor_update_freq, actor_idx=actor_idx, mode=mode)
+                          actor_idx=actor_idx, mode=mode)
 
 
 if __name__ == "__main__":
@@ -250,11 +251,11 @@ if __name__ == "__main__":
         if i == 0:
             thread = threading.Thread(target=actor.run, args=(
                 i, env, None, i, run_param["max_steps"], run_param["name_tensorboard"],
-                run_param["target_update_freq(epochs)"], args.mode))
+                args.mode))
         else:
             thread = threading.Thread(target=actor.run, args=(
                 i, None, run_param["env_path"], i, run_param["max_steps"], run_param["name_tensorboard"],
-                run_param["target_update_freq(epochs)"], args.mode))
+                args.mode))
         threads.append(thread)
         thread.start()
     for thread in threads:
