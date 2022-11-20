@@ -15,7 +15,7 @@ from tqdm import tqdm
 
 from Experience_Replay import Distributed_Memory
 from utils import initialize_model, save_checkpoint, load_checkpoint, wait_until_present, \
-    calculate_loss_from_all_loss_stats
+    calculate_loss_from_all_loss_stats,sync_grads
 
 
 class Learner:
@@ -229,7 +229,7 @@ class Learner:
                                     hidden_state=hidden_state_target,
                                     cell_state=cell_state_target,
                                     lstm_out=out_target)
-                            Q_next_max = torch.max(Q_next.reshape(-1))
+                            Q_next_max = torch.max(Q_next.reshape(-1).detach())
                         out, (hidden_state, cell_state), Q_s = self.main_model[id](
                             current_visual_obs_per_episode[:, t:t + 1],
                             hidden_state=hidden_state, cell_state=cell_state,
@@ -251,8 +251,8 @@ class Learner:
                 # backward
                 loss.backward()
 
-                # # Synchronize gradients from all learners
-                # sync_grads(self.main_model[id])
+                # Synchronize gradients from all learners
+                sync_grads(self.main_model[id])
                 # update params
                 self.optimizer[id].step()
                 # release memory
