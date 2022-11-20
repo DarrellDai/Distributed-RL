@@ -38,12 +38,13 @@ class Actor:
             if not torch.cuda.is_available():
                 raise RuntimeError("CUDA is not available, please choose CPU by setting device_idx=-1")
             self.device = torch.device('cuda:' + str(device_idx))
-        self.instance_idx=instance_idx
+        self.instance_idx = instance_idx
         self._connect = redis.Redis(host=hostname, db=instance_idx)
         torch.set_num_threads(10)
 
     def initialize_env(self, env_path, actor_idx):
-        unity_env = UnityEnvironment(env_path + "_" + str(actor_idx) + "/Hide and Seek", worker_id=actor_idx+self.num_actor*self.instance_idx)
+        unity_env = UnityEnvironment(env_path + "_" + str(actor_idx) + "/Hide and Seek",
+                                     worker_id=actor_idx + self.num_actor * self.instance_idx)
         env = MultiUnityWrapper(unity_env=unity_env, uint8_visual=True, allow_multiple_obs=True)
         if actor_idx == 0:
             self.id_to_name = get_agents_id_to_name(env)
@@ -51,7 +52,7 @@ class Actor:
             self._connect.set("id_to_name", cPickle.dumps(self.id_to_name))
         return env
 
-    def initialize_model(self, cnn_out_size, lstm_hidden_size, action_shape,atten_size, mode,
+    def initialize_model(self, cnn_out_size, lstm_hidden_size, action_shape, atten_size, mode,
                          checkpoint_to_load=None):
         self.action_shape = {}
         self.atten_size = {}
@@ -65,7 +66,7 @@ class Actor:
             self._pull_params()
         else:
             model_state_dicts, optimizer_state_dicts, episode_count, self.epsilon, self.initial_epoch_count, success_count = load_checkpoint(
-                checkpoint_to_load, self.device)
+                checkpoint_to_load + ".pth.tar", self.device)
             for id in self.agent_ids:
                 self.model[id].load_state_dict(model_state_dicts[id])
 
@@ -99,10 +100,10 @@ class Actor:
         return act, hidden_state, cell_state, lstm_out
 
     def collect_data(self, env, max_steps, name_tensorboard, actor_idx, mode):
-        if actor_idx==0:
+        if actor_idx == 0:
             self._connect.set("to_update", cPickle.dumps(False))
         memory = Memory(self.memory_size, self.agent_ids)
-        writer = SummaryWriter(os.path.join("runs", str(self.instance_idx)+ "_" + name_tensorboard))
+        writer = SummaryWriter(os.path.join("runs", str(self.instance_idx) + "_" + name_tensorboard))
         total_reward = {}
         local_memory = {}
         hidden_state = {}
@@ -137,22 +138,20 @@ class Actor:
                     lstm_out[id] = lstm_out[id].to(self.device)
                 step_count += 1
                 with torch.no_grad():
-                    # todo:check this lock
                     with threading.Lock():
                         act, hidden_state, cell_state, lstm_out = self.find_best_action_by_model(prev_obs,
-                                                                                                     hidden_state,
-                                                                                                     cell_state,
-                                                                                                     lstm_out)
+                                                                                                 hidden_state,
+                                                                                                 cell_state,
+                                                                                                 lstm_out)
                         if np.random.rand(1) < epsilon:
                             act = self.find_random_action(env)
                     obs_dict, reward_dict, done_dict, info_dict = env.step(act)
 
                     done = done_dict["__all__"]
 
-
                     for id in self.agent_ids:
-                        if reward_dict[id]==-1:
-                            done=True
+                        if reward_dict[id] == -1:
+                            done = True
                         total_reward[id] += reward_dict[id]
 
                         prev_obs[id][0] = prev_obs[id][0].reshape(prev_obs[id][0].shape[2], prev_obs[id][0].shape[3],
@@ -198,11 +197,9 @@ class Actor:
                         writer.add_scalar(self.id_to_name[id] + ": Reward vs Episode", total_reward[id], episode_count)
                     writer.flush()
 
-
                 if to_update and actor_idx == 0:
                     self._pull_params()
                     self._connect.set("to_update", cPickle.dumps(False))
-
 
     def _pull_params(self):
         wait_until_present(self._connect, "params")
@@ -240,11 +237,12 @@ if __name__ == "__main__":
         run_param = yaml.safe_load(file)
     actor = Actor(
         num_actor=args.num_actors,
-        device_idx=args.device, memsize=run_param["memory_size"], hostname=args.redisserver, instance_idx=args.instance_idx)
+        device_idx=args.device, memsize=run_param["memory_size"], hostname=args.redisserver,
+        instance_idx=args.instance_idx)
     env = actor.initialize_env(run_param["env_path"], 0)
     actor.initialize_model(cnn_out_size=model_param["cnn_out_size"], lstm_hidden_size=model_param["lstm_hidden_size"],
                            action_shape=model_param["action_shape"],
-                            atten_size=model_param["atten_size"],
+                           atten_size=model_param["atten_size"],
                            mode=args.mode, checkpoint_to_load=run_param["checkpoint_to_load"])
     threads = []
     for i in range(args.num_actors):

@@ -14,8 +14,9 @@ from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
 from Experience_Replay import Distributed_Memory
-from utils import initialize_model, save_checkpoint, load_checkpoint, wait_until_present, sync_grads, \
+from utils import initialize_model, save_checkpoint, load_checkpoint, wait_until_present, \
     calculate_loss_from_all_loss_stats
+
 
 class Learner:
     def __init__(self, memsize, num_actor=1, epsilon=1, hostname="localhost", device_idx=[0], instance_idx=0):
@@ -23,9 +24,9 @@ class Learner:
         self.memory_size = memsize
         self.device_idx = device_idx
         self.epsilon = epsilon
-        self.instance_idx=instance_idx
+        self.instance_idx = instance_idx
         if MPI.COMM_WORLD.Get_rank() == 0:
-            self._connect = redis.Redis(host=hostname,db=self.instance_idx)
+            self._connect = redis.Redis(host=hostname, db=self.instance_idx)
             self._connect.delete("id_to_name")
             self._connect.delete("params")
             self._connect.delete("epsilon")
@@ -120,7 +121,7 @@ class Learner:
               total_epochs, actor_update_freq, target_update_freq,
               performance_display_interval, checkpoint_save_interval, checkpoint_to_save):
         if MPI.COMM_WORLD.Get_rank() == 0:
-            writer = SummaryWriter(os.path.join("runs", str(self.instance_idx)+ "_" + name_tensorboard))
+            writer = SummaryWriter(os.path.join("runs", str(self.instance_idx) + "_" + name_tensorboard))
             self._wait_memory()
             counter = tqdm(range(self.initial_epoch_count, total_epochs))
         else:
@@ -186,7 +187,7 @@ class Learner:
                         "episode_count": episode_count,
                         "epoch_count": epoch,
                         "success_count": success_count
-                    }, filename=str(self.instance_idx)+ "_" + checkpoint_to_save + "_" + str(epoch + 1) + ".pth.tar")
+                    }, filename=str(self.instance_idx) + "_" + checkpoint_to_save + "_" + str(epoch + 1) + ".pth.tar")
 
     def learn(self, batches, gamma, loss_stat):
         for id in self.agent_ids:
@@ -194,7 +195,7 @@ class Learner:
 
                 Q_s_a = []
                 target_values = []
-                for batch_idx in range(len(batch)):
+                for episode_idx in range(len(batch)):
                     hidden_state, cell_state, out = self.main_model[id].lstm.init_hidden_states_and_outputs(
                         bsize=1)
                     hidden_state = hidden_state.to(self.device)
@@ -209,10 +210,10 @@ class Learner:
                     act, current_vector_obs, current_visual_obs, next_vector_obs, next_visual_obs, rewards = self.preprocess_data_from_batch(
                         batch)
                     act_per_episode, current_visual_obs_per_episode, current_vector_obs_per_episode, rewards_per_episode, visual_obs_per_episode, next_vector_obs_per_episode = self.extract_input_per_episode(
-                        act, batch_idx, current_vector_obs, current_visual_obs, next_vector_obs, next_visual_obs,
+                        act, episode_idx, current_vector_obs, current_visual_obs, next_vector_obs, next_visual_obs,
                         rewards)
 
-                    for t in range(len(batch[batch_idx])):
+                    for t in range(len(batch[episode_idx])):
                         if next_vector_obs_per_episode[t][0] == 0:
                             Q_next_max = 0
                         else:
@@ -234,7 +235,7 @@ class Learner:
                             hidden_state=hidden_state, cell_state=cell_state,
                             lstm_out=out)
 
-                        Q_s_a.append(Q_s[0][tuple(np.array(act_per_episode[0, t].cpu()))])
+                        Q_s_a.append(Q_s[0][tuple(np.array(act_per_episode[0, t].cpu()) + 1)])
                         target_values.append(rewards_per_episode[t] + (gamma * Q_next_max))
                 Q_s_a = torch.stack(Q_s_a)
                 target_values = torch.stack(target_values)
