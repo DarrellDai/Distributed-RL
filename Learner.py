@@ -15,7 +15,7 @@ from tqdm import tqdm
 
 from Experience_Replay import Distributed_Memory
 from utils import initialize_model, save_checkpoint, load_checkpoint, wait_until_present, \
-    calculate_loss_from_all_loss_stats,sync_grads
+    calculate_loss_from_all_loss_stats, sync_grads
 
 
 class Learner:
@@ -59,7 +59,8 @@ class Learner:
             last_length = len(self._memory)
             time.sleep(0.1)
 
-    def initialize_model(self, cnn_out_size, lstm_hidden_size, action_shape, atten_size):
+    def initialize_model(self, cnn_out_size, lstm_hidden_size, action_shape, atten_size, method="DQN"):
+        self.method = method
         self.id_to_name = None
         self.agent_ids = None
         if MPI.COMM_WORLD.Get_rank() == 0:
@@ -72,7 +73,7 @@ class Learner:
         self.id_to_name = MPI.COMM_WORLD.bcast(self.id_to_name)
         self.agent_ids = MPI.COMM_WORLD.bcast(self.agent_ids)
         self.main_model = initialize_model(self.agent_ids, cnn_out_size, lstm_hidden_size, action_shape,
-                                           atten_size, self.device)
+                                           atten_size, self.device, method)
 
     def get_model_state_dict(self):
         model_state_dict = {}
@@ -81,7 +82,6 @@ class Learner:
         return model_state_dict
 
     def initialize_training(self, learning_rate, checkpoint_to_load=None, resume=False):
-        self.criterion = nn.MSELoss()
         self.optimizer = {}
         self.initial_epoch_count = None
         for id in self.agent_ids:
@@ -115,7 +115,11 @@ class Learner:
                 self._connect.set("epoch", cPickle.dumps(0))
                 self._connect.set("params", cPickle.dumps(self.get_model_state_dict()))
             self.initial_epoch_count = 0
-        self.target_model = deepcopy(self.main_model)
+        if self.method == "DQN":
+            self.criterion = nn.MSELoss()
+            self.target_model = deepcopy(self.main_model)
+        elif self.method == "BC":
+            self.criterion = nn.CrossEntropyLoss()
 
     def train(self, batch_size, time_step, gamma, learning_rate, final_epsilon, epsilon_vanish_rate, name_tensorboard,
               total_epochs, actor_update_freq, target_update_freq,
@@ -133,7 +137,7 @@ class Learner:
             for id in self.agent_ids:
                 loss_stat[id] = []
             if MPI.COMM_WORLD.Get_rank() == 0:
-                batches = self._memory.get_batch(bsize=batch_size, num_learner=MPI.COMM_WORLD.Get_size(), num_batch=2,
+                batches = self._memory.get_batch(bsize=batch_size, num_learner=MPI.COMM_WORLD.Get_size(), num_batch=4,
                                                  time_step=time_step)
             batch = MPI.COMM_WORLD.scatter(batches)
             self.learn(batch, gamma, loss_stat)
@@ -171,7 +175,7 @@ class Learner:
                 if self.epsilon > final_epsilon:
                     self.epsilon *= epsilon_vanish_rate
 
-                if (epoch + 1) % target_update_freq == 0:
+                if (epoch + 1) % target_update_freq == 0 and self.method == "DQN":
                     for id in self.agent_ids:
                         self.target_model[id].load_state_dict(self.main_model[id].state_dict())
                 if (epoch + 1) % checkpoint_save_interval == 0:
@@ -193,7 +197,7 @@ class Learner:
         for id in self.agent_ids:
             for batch in batches[id]:
 
-                Q_s_a = []
+                pred_values = []
                 target_values = []
                 for episode_idx in range(len(batch)):
                     hidden_state, cell_state, out = self.main_model[id].lstm.init_hidden_states_and_outputs(
@@ -214,33 +218,44 @@ class Learner:
                         rewards)
 
                     for t in range(len(batch[episode_idx])):
-                        if next_vector_obs_per_episode[t][0] == 0:
-                            Q_next_max = 0
-                        else:
-                            if t == 0:
-                                out_target, (hidden_state_target, cell_state_target), Q_next = self.target_model[id](
-                                    visual_obs_per_episode[:, t:t + 2],
-                                    hidden_state=hidden_state_target,
-                                    cell_state=cell_state_target,
-                                    lstm_out=out_target)
+                        if self.method == "DQN":
+                            if next_vector_obs_per_episode[t][0] == 0:
+                                Q_next_max = 0
                             else:
-                                out_target, (hidden_state_target, cell_state_target), Q_next = self.target_model[id](
-                                    visual_obs_per_episode[:, t + 1:t + 2],
-                                    hidden_state=hidden_state_target,
-                                    cell_state=cell_state_target,
-                                    lstm_out=out_target)
-                            Q_next_max = torch.max(Q_next.reshape(-1).detach())
-                        out, (hidden_state, cell_state), Q_s = self.main_model[id](
-                            current_visual_obs_per_episode[:, t:t + 1],
-                            hidden_state=hidden_state, cell_state=cell_state,
-                            lstm_out=out)
+                                if t == 0:
+                                    out_target, (hidden_state_target, cell_state_target), Q_next = self.target_model[
+                                        id](
+                                        visual_obs_per_episode[:, t:t + 2],
+                                        hidden_state=hidden_state_target,
+                                        cell_state=cell_state_target,
+                                        lstm_out=out_target)
+                                else:
+                                    out_target, (hidden_state_target, cell_state_target), Q_next = self.target_model[
+                                        id](
+                                        visual_obs_per_episode[:, t + 1:t + 2],
+                                        hidden_state=hidden_state_target,
+                                        cell_state=cell_state_target,
+                                        lstm_out=out_target)
+                                Q_next_max = torch.max(Q_next.reshape(-1).detach())
+                            out, (hidden_state, cell_state), Q_s = self.main_model[id](
+                                current_visual_obs_per_episode[:, t:t + 1],
+                                hidden_state=hidden_state, cell_state=cell_state,
+                                lstm_out=out)
 
-                        Q_s_a.append(Q_s[0][tuple(np.array(act_per_episode[0, t].cpu()) + 1)])
-                        target_values.append(rewards_per_episode[t] + (gamma * Q_next_max))
-                Q_s_a = torch.stack(Q_s_a)
+                            pred_values.append(Q_s[0][tuple(np.array(act_per_episode[0, t].cpu()) + 1)])
+                            target_values.append(rewards_per_episode[t] + (gamma * Q_next_max))
+                        elif self.method == "BC":
+                            out, (hidden_state, cell_state), act_prob = self.main_model[id](
+                                current_visual_obs_per_episode[:, t:t + 1],
+                                hidden_state=hidden_state, cell_state=cell_state,
+                                lstm_out=out)
+                            pred_values.append(act_prob.view(-1))
+                            target_values.append(torch.tensor(np.ravel_multi_index(np.array(act_per_episode[0, t].cpu()) + 1, act_prob[0].shape)).detach())
+
+                pred_values = torch.stack(pred_values)
                 target_values = torch.stack(target_values)
 
-                loss = self.criterion(Q_s_a, target_values)
+                loss = self.criterion(pred_values, target_values)
 
                 #  save performance measure
                 loss_stat[id].append(loss.item())
@@ -316,7 +331,7 @@ if __name__ == "__main__":
                       hostname=args.redisserver, device_idx=run_param["device_idx"], instance_idx=args.instance_idx)
     learner.initialize_model(cnn_out_size=model_param["cnn_out_size"], lstm_hidden_size=model_param["lstm_hidden_size"],
                              action_shape=model_param["action_shape"],
-                             atten_size=model_param["atten_size"])
+                             atten_size=model_param["atten_size"], method=model_param["method"])
     learner.initialize_training(learning_rate=run_param["learning_rate"], resume=run_param["resume"],
                                 checkpoint_to_load=run_param["checkpoint_to_load"])
     learner.train(batch_size=run_param["batch_size"], time_step=run_param["time_step"], gamma=run_param["gamma"],

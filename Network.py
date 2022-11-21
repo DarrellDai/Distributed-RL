@@ -1,10 +1,10 @@
-import torch.nn as nn
-import torch
-from LSTM_attention import LSTM
-from torchvision.models import resnet18, ResNet18_Weights
-from DQN import DQN
-from ActNet import ActNet
 import numpy as np
+import torch.nn as nn
+from torchvision.models import resnet18
+
+from BCNet import BCNet
+from DQN import DQN
+from LSTM_attention import LSTM
 
 
 class Network(nn.Module):
@@ -12,13 +12,17 @@ class Network(nn.Module):
     action_shape(tuple): action shape for an agent
     '''
 
-    def __init__(self, cnn_out_size, action_space_shape, lstm_hidden_size, atten_size):
+    def __init__(self, cnn_out_size, action_space_shape, lstm_hidden_size, atten_size, method="DQN"):
         super(Network, self).__init__()
         self.action_shape = action_space_shape
         self.cnn_out_size = cnn_out_size
         self.resnet = resnet18(num_classes=cnn_out_size)
         self.lstm = LSTM(cnn_out_size, lstm_hidden_size, atten_size)
-        self.dqn = DQN(lstm_hidden_size, np.prod(np.array(self.action_shape)))
+        self.method=method
+        if self.method == "DQN":
+            self.fc = DQN(lstm_hidden_size, np.prod(np.array(self.action_shape)))
+        elif self.method == "BC":
+            self.fc = BCNet(lstm_hidden_size, np.prod(np.array(self.action_shape)))
 
     '''
     Input:
@@ -53,11 +57,10 @@ class Network(nn.Module):
         resnet_out = resnet_out.view(bsize, int(obs.shape[0] / bsize), -1)
         lstm_out, (hidden_state, cell_state) = self.lstm(resnet_out, hidden_state, cell_state,
                                                          lstm_out)
-        #todo: original code here mignt not cosider the atten_size in dqn_out
-        dqn_out = self.dqn(lstm_out[:,-1,:])
-        dqn_out=dqn_out.view((bsize,)+self.action_shape)
-
-        return lstm_out, (hidden_state, cell_state), dqn_out
+        # todo: original code here mignt not cosider the atten_size in dqn_out
+        network_out = self.fc(lstm_out[:, -1, :])
+        network_out = network_out.view((bsize,) + self.action_shape)
+        return lstm_out, (hidden_state, cell_state), network_out
 
     def generate_action_matrix(self):
         action_matrix = np.zeros(self.action_shape)
