@@ -83,11 +83,11 @@ class Learner:
 
     def initialize_training(self, learning_rate, checkpoint_to_load=None, resume=False):
         self.optimizer = {}
-        self.scheduler={}
+        self.scheduler = {}
         self.initial_epoch_count = None
         for id in self.agent_ids:
             self.optimizer[id] = torch.optim.Adam(self.main_model[id].parameters(), lr=learning_rate)
-            self.scheduler[id] = torch.optim.lr_scheduler.StepLR(self.optimizer[id], step_size=50, gamma=0.2)
+            self.scheduler[id] = torch.optim.lr_scheduler.StepLR(self.optimizer[id], step_size=25, gamma=0.1)
         if resume:
             if MPI.COMM_WORLD.Get_rank() == 0:
                 model_state_dicts, optimizer_state_dicts, episode_count, self.epsilon, self.initial_epoch_count, success_count = load_checkpoint(
@@ -123,7 +123,7 @@ class Learner:
         elif self.method == "BC":
             self.criterion = nn.CrossEntropyLoss()
 
-    def train(self, batch_size, time_step, gamma, learning_rate, final_epsilon, epsilon_vanish_rate, name_tensorboard,
+    def train(self, batch_size, time_step, gamma, final_epsilon, epsilon_vanish_rate, name_tensorboard,
               total_epochs, actor_update_freq, target_update_freq,
               performance_display_interval, checkpoint_save_interval, checkpoint_to_save):
         if MPI.COMM_WORLD.Get_rank() == 0:
@@ -157,9 +157,9 @@ class Learner:
                     episode_count = cPickle.loads(self._connect.get("episode_count"))
                     # print("Learner got episode_count")
                 if (epoch + 1) % performance_display_interval == 0:
-                    print('\n Epoch: [%d | %d] LR: %.16f Epsilon : %f \n' % (
-                        epoch, total_epochs, self.optimizer[id].param_groups[0]["lr"], self.epsilon))
                     for id in self.agent_ids:
+                        print('\n Epoch: [%d | %d] LR: %.16f Epsilon : %f \n' % (
+                            epoch, total_epochs, self.optimizer[id].param_groups[0]["lr"], self.epsilon))
                         print('\n Agent %d, Loss: %f \n' % (id, loss[id]))
                 for id in self.agent_ids:
                     # todo: success_count should be associated to player type
@@ -244,18 +244,22 @@ class Learner:
                                 hidden_state=hidden_state, cell_state=cell_state,
                                 lstm_out=out)
 
-                            pred_values.append(Q_s[0][tuple(np.array(act_per_episode[0, t].cpu()) + 1)])
-                            target_values.append(rewards_per_episode[t] + (gamma * Q_next_max))
                         elif self.method == "BC":
                             out, (hidden_state, cell_state), act_prob = self.main_model[id](
                                 current_visual_obs_per_episode[:, t:t + 1],
                                 hidden_state=hidden_state, cell_state=cell_state,
                                 lstm_out=out)
-                            pred_values.append(act_prob.view(-1))
-                            target_values.append(torch.tensor(np.ravel_multi_index(np.array(act_per_episode[0, t].cpu()) + 1, act_prob[0].shape)).detach())
+                    if self.method == "DQN":
+                        pred_values.append(Q_s[0][tuple(np.array(act_per_episode[0, t].cpu()) + 1)])
+                        target_values.append(rewards_per_episode[t] + (gamma * Q_next_max))
+                    elif self.method == "BC":
+                        pred_values.append(act_prob.view(-1))
+                        target_values.append(torch.tensor(
+                            np.ravel_multi_index(np.array(act_per_episode[0, t].cpu()) + 1,
+                                                 act_prob[0].shape)).detach())
 
                 pred_values = torch.stack(pred_values)
-                target_values = torch.stack(target_values)
+                target_values = torch.stack(target_values).to(self.device)
 
                 loss = self.criterion(pred_values, target_values)
 
@@ -268,8 +272,8 @@ class Learner:
                 # backward
                 loss.backward()
 
-                # Synchronize gradients from all learners
-                sync_grads(self.main_model[id])
+                # # Synchronize gradients from all learners
+                # sync_grads(self.main_model[id])
                 # update params
                 self.optimizer[id].step()
 
@@ -340,7 +344,7 @@ if __name__ == "__main__":
     learner.initialize_training(learning_rate=run_param["learning_rate"], resume=run_param["resume"],
                                 checkpoint_to_load=run_param["checkpoint_to_load"])
     learner.train(batch_size=run_param["batch_size"], time_step=run_param["time_step"], gamma=run_param["gamma"],
-                  learning_rate=run_param["learning_rate"], name_tensorboard=run_param["name_tensorboard"],
+                  name_tensorboard=run_param["name_tensorboard"],
                   final_epsilon=run_param["final_epsilon"],
                   epsilon_vanish_rate=run_param["epsilon_vanish_rate"],
                   total_epochs=run_param["total_epochs"], actor_update_freq=run_param["actor_update_freq(epochs)"],
