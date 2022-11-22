@@ -83,9 +83,11 @@ class Learner:
 
     def initialize_training(self, learning_rate, checkpoint_to_load=None, resume=False):
         self.optimizer = {}
+        self.scheduler={}
         self.initial_epoch_count = None
         for id in self.agent_ids:
             self.optimizer[id] = torch.optim.Adam(self.main_model[id].parameters(), lr=learning_rate)
+            self.scheduler[id] = torch.optim.lr_scheduler.StepLR(self.optimizer[id], step_size=50, gamma=0.2)
         if resume:
             if MPI.COMM_WORLD.Get_rank() == 0:
                 model_state_dicts, optimizer_state_dicts, episode_count, self.epsilon, self.initial_epoch_count, success_count = load_checkpoint(
@@ -155,8 +157,8 @@ class Learner:
                     episode_count = cPickle.loads(self._connect.get("episode_count"))
                     # print("Learner got episode_count")
                 if (epoch + 1) % performance_display_interval == 0:
-                    print('\n Epoch: [%d | %d] LR: %f Epsilon : %f \n' % (
-                        epoch, total_epochs, learning_rate, self.epsilon))
+                    print('\n Epoch: [%d | %d] LR: %.16f Epsilon : %f \n' % (
+                        epoch, total_epochs, self.optimizer[id].param_groups[0]["lr"], self.epsilon))
                     for id in self.agent_ids:
                         print('\n Agent %d, Loss: %f \n' % (id, loss[id]))
                 for id in self.agent_ids:
@@ -270,8 +272,11 @@ class Learner:
                 sync_grads(self.main_model[id])
                 # update params
                 self.optimizer[id].step()
+
                 # release memory
                 torch.cuda.empty_cache()
+
+            self.scheduler[id].step()
 
     def preprocess_data_from_batch(self, batch):
         current_visual_obs = []

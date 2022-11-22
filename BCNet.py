@@ -4,9 +4,11 @@ import numpy as np
 class BCNet(nn.Module):
     def __init__(self, input_size, output_size):
         super().__init__()
-        self.bc_net = nn.Sequential(nn.Linear(input_size, int(input_size / 4)),
+        self.bc_net = nn.Sequential(nn.Linear(input_size, int(input_size / 3)),
                                     nn.ReLU(),
-                                    nn.Linear(int(input_size / 4), output_size),
+                                    nn.Linear(int(input_size / 3), int(input_size / 9)),
+                                    nn.ReLU(),
+                                    nn.Linear(int(input_size / 9), output_size),
                                     nn.Softmax(-1)
                                     )
 
