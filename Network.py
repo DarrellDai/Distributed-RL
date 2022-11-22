@@ -18,7 +18,7 @@ class Network(nn.Module):
         self.cnn_out_size = cnn_out_size
         self.resnet = resnet18(num_classes=cnn_out_size)
         self.lstm = LSTM(cnn_out_size, lstm_hidden_size, atten_size)
-        self.method=method
+        self.method = method
         if self.method == "DQN":
             self.fc = DQN(lstm_hidden_size, np.prod(np.array(self.action_shape)))
         elif self.method == "BC":
@@ -47,6 +47,7 @@ class Network(nn.Module):
 
     def forward(self, obs, hidden_state, cell_state, lstm_out):
         bsize = obs.shape[0]
+        obs = obs / 255
         if len(obs.shape) == 5:
             obs = obs.reshape(bsize * obs.shape[1], obs.shape[4], obs.shape[2], obs.shape[3])
         elif len(obs.shape) == 4:
