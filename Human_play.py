@@ -28,15 +28,13 @@ class Human_play:
         self.device_idx = device_idx
         self.device = torch.device('cuda:' + str(device_idx) if torch.cuda.is_available() else 'cpu')
 
-    def initialize_env(self, env_path, max_steps, total_episodes, worker_id, hostname="localhost"):
+    def initialize_env(self, env_path, max_steps, total_episodes, worker_id):
         unity_env = UnityEnvironment(env_path, worker_id=worker_id)
         self.env = MultiUnityWrapper(unity_env=unity_env, uint8_visual=True, allow_multiple_obs=True)
         self.id_to_name = get_agents_id_to_name(self.env)
         self.agent_ids = tuple(self.id_to_name.keys())
         self.max_steps = max_steps
         self.total_episodes = total_episodes
-        self._connect = redis.Redis(host=hostname)
-        self._connect.set("id_to_name", cPickle.dumps(self.id_to_name))
 
     def controller(self):
         act = {}
@@ -123,7 +121,7 @@ class Human_play:
 
     def initialize_server(self, hostname='localhost'):
         self.connect = redis.Redis(host=hostname)
-        self.connect.delete("experience")
+
 
     def real_time_mode(self, hostname='localhost'):
         self.play_game(real_time_memory_sync=True, hostname=hostname)
@@ -143,12 +141,13 @@ class Human_play:
         self.initialize_server(hostname)
         memory, self.id_to_name, _ = self.load_checkpoint(checkpoint_name)
         if mode == "success_only":
-            filtered_memory = Memory(memsize=memory.memsize, agent_ids=memory.agent_ids)
+            filtered_memory = Memory(memsize=1, agent_ids=memory.agent_ids)
             for id in self.id_to_name:
                 for episode in memory.replay_buffer[id]:
                     if len(episode) == 50:
                         filtered_memory.replay_buffer[id].append(episode)
-        memory = filtered_memory
+                        break
+            memory = filtered_memory
         self.connect.set("id_to_name", cPickle.dumps(self.id_to_name))
         self.connect.rpush("experience", cPickle.dumps(memory))
         with self.connect.lock("Update"):

@@ -82,26 +82,25 @@ class Distributed_Memory(threading.Thread):
         self.memsize = memsize
         self._memory = Memory(memsize, agent_ids)
         self._connect = connect
-        self._connect.delete("experience")
         self._lock = threading.Lock()
 
     def run(self):
         while True:
-            with self._connect.lock("Update Experience"):
-                pipe = self._connect.pipeline()
-                pipe.lrange("experience", 0, -1)
-                pipe.delete("experience")
-                memories = pipe.execute()[0]
-                if not memories is None:
-                    for memory in memories:
-                        load_memory = cPickle.loads(memory)
-                        with self._lock:
-                            for i in range(len(load_memory)):
-                                episode = {}
-                                for id in load_memory.agent_ids:
-                                    episode[id] = load_memory.replay_buffer[id][i]
-                                self._memory.add_episode(episode)
-            time.sleep(0.01)
+            pipe = self._connect.pipeline()
+            pipe.lrange("experience", 0, -1)
+            pipe.ltrim("experience", -1, 0)
+            memories = pipe.execute()[0]
+            if not memories is None:
+                for memory in memories:
+                    load_memory = cPickle.loads(memory)
+                    with self._lock:
+                        for i in range(len(load_memory)):
+                            episode = {}
+                            for id in load_memory.agent_ids:
+                                episode[id] = load_memory.replay_buffer[id][i]
+                            self._memory.add_episode(episode)
+            time.sleep(0.1)
+
 
     def get_batch(self, bsize, num_batch, num_learner, time_step):
         with self._lock:
