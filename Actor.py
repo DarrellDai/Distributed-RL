@@ -53,7 +53,7 @@ class Actor:
         return env
 
     def initialize_model(self, cnn_out_size, lstm_hidden_size, action_shape, atten_size, mode,
-                         checkpoint_to_load=None):
+                         checkpoint_to_load=None, method="DQN"):
         self.action_shape = {}
         self.atten_size = {}
         for idx in range(len(self.agent_ids)):
@@ -61,7 +61,7 @@ class Actor:
             self.atten_size[self.agent_ids[idx]] = atten_size[idx]
 
         self.model = initialize_model(self.agent_ids, cnn_out_size, lstm_hidden_size, action_shape,
-                                      atten_size, self.device)
+                                      atten_size, self.device, method)
         if mode == "train":
             self._pull_params()
         else:
@@ -243,7 +243,7 @@ if __name__ == "__main__":
     actor.initialize_model(cnn_out_size=model_param["cnn_out_size"], lstm_hidden_size=model_param["lstm_hidden_size"],
                            action_shape=model_param["action_shape"],
                            atten_size=model_param["atten_size"],
-                           mode=args.mode, checkpoint_to_load=run_param["checkpoint_to_load"])
+                           mode=args.mode, checkpoint_to_load=run_param["checkpoint_to_load"], method=model_param["method"])
     threads = []
     for i in range(args.num_actors):
         if i == 0:
