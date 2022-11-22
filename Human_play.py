@@ -141,12 +141,11 @@ class Human_play:
         self.initialize_server(hostname)
         memory, self.id_to_name, _ = self.load_checkpoint(checkpoint_name)
         if mode == "success_only":
-            filtered_memory = Memory(memsize=1, agent_ids=memory.agent_ids)
+            filtered_memory = Memory(memsize=50, agent_ids=memory.agent_ids)
             for id in self.id_to_name:
                 for episode in memory.replay_buffer[id]:
                     if len(episode) == 50:
                         filtered_memory.replay_buffer[id].append(episode)
-                        break
             memory = filtered_memory
         self.connect.set("id_to_name", cPickle.dumps(self.id_to_name))
         self.connect.rpush("experience", cPickle.dumps(memory))

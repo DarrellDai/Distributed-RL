@@ -1,5 +1,4 @@
 import _pickle as cPickle
-import random
 import threading
 import time
 from collections import deque
@@ -18,14 +17,14 @@ class Memory():
             self.replay_buffer[id] = deque(maxlen=self.memsize)
 
     def add_episode(self, episodes):
-        clip_flag=False
+        clip_flag = False
         for id in self.agent_ids:
             for t in range(len(episodes[id])):
-                if episodes[id][t][2]== -1:
-                    if episodes[id][t][0][1][0]==episodes[id][t][3][1][0]:
+                if episodes[id][t][2] == -1:
+                    if episodes[id][t][0][1][0] == episodes[id][t][3][1][0]:
                         raise RuntimeError("The agent is dead, but still showing alive in its observation")
                 if episodes[id][t][0][1][0] == 0:
-                    clip_flag=True
+                    clip_flag = True
                     break
             if clip_flag:
                 self.replay_buffer[id].append(episodes[id][:t])
@@ -33,39 +32,8 @@ class Memory():
                 self.replay_buffer[id].append(episodes[id])
         self.check_dimension()
 
-    # def get_batch(self, bsize, num_batch, num_learners, time_step):
-    #     self.check_dimension()
-    #     self.check_total_num_vs_needed_for_batch(bsize, num_batch, num_learners)
-    #     batches = []
-    #     for idx_in_batch in range(num_learners):
-    #         batches.append({})
-    #         for id in self.agent_ids:
-    #             batches[idx_in_batch][id] = []
-    #     sampled_idx = random.sample(range(len(self)), bsize * num_batch * num_learners)
-    #     sampled_idx = np.array(sampled_idx).reshape((num_learners, num_batch, bsize))
-    #     for learner_idx in range(num_learners):
-    #         for id in self.agent_ids:
-    #             for batch_idx in range(num_batch):
-    #                 buffer = []
-    #                 for idx_in_batch in range(bsize):
-    #                     try:
-    #                         point = np.random.randint(0, len(self.replay_buffer[id][sampled_idx[
-    #                             learner_idx, batch_idx, idx_in_batch]]) + 1 - time_step)
-    #                         buffer.append(self.replay_buffer[id][sampled_idx[learner_idx, batch_idx, idx_in_batch]][
-    #                                       point:point + time_step])
-    #                     except:
-    #                         buffer.append(self.replay_buffer[id][sampled_idx[learner_idx, batch_idx, idx_in_batch]])
-    #                 batches[learner_idx][id].append(buffer)
-    #     return batches
-
-    def get_batch(self, bsize, num_batch, num_learners):
+    def get_batch(self, bsize, num_batch, num_learners, time_step):
         self.check_dimension()
-        data={}
-        for id in self.agent_ids:
-            data[id]=[]
-            for episode in self.replay_buffer[id]:
-                for point in episode:
-                    data[id].append(point)
         batches = []
         for idx_in_batch in range(num_learners):
             batches.append({})
@@ -73,14 +41,41 @@ class Memory():
                 batches[idx_in_batch][id] = []
         for learner_idx in range(num_learners):
             for id in self.agent_ids:
-                sampled_idx = random.sample(range(len(data[id])), bsize * num_batch)
-                sampled_idx = np.array(sampled_idx).reshape((num_batch, bsize))
                 for batch_idx in range(num_batch):
                     buffer = []
                     for idx_in_batch in range(bsize):
-                        buffer.append(data[id][sampled_idx[batch_idx, idx_in_batch]])
-                    batches[learner_idx][id].append([buffer])
+                        sampled_idx = np.random.randint(0, len(self))
+                        try:
+                            point = np.random.randint(0, len(self.replay_buffer[id][sampled_idx]) + 1 - time_step)
+                            buffer.append(self.replay_buffer[id][sampled_idx][point:point + time_step])
+                        except:
+                            buffer.append(self.replay_buffer[id][sampled_idx])
+                    batches[learner_idx][id].append(buffer)
         return batches
+
+    # def get_batch(self, bsize, num_batch, num_learners):
+    #     self.check_dimension()
+    #     data={}
+    #     for id in self.agent_ids:
+    #         data[id]=[]
+    #         for episode in self.replay_buffer[id]:
+    #             for point in episode:
+    #                 data[id].append(point)
+    #     batches = []
+    #     for idx_in_batch in range(num_learners):
+    #         batches.append({})
+    #         for id in self.agent_ids:
+    #             batches[idx_in_batch][id] = []
+    #     for learner_idx in range(num_learners):
+    #         for id in self.agent_ids:
+    #             sampled_idx = random.sample(range(len(data[id])), bsize * num_batch)
+    #             sampled_idx = np.array(sampled_idx).reshape((num_batch, bsize))
+    #             for batch_idx in range(num_batch):
+    #                 buffer = []
+    #                 for idx_in_batch in range(bsize):
+    #                     buffer.append(data[id][sampled_idx[batch_idx, idx_in_batch]])
+    #                 batches[learner_idx][id].append([buffer])
+    #     return batches
 
     def check_dimension(self):
         for id in self.agent_ids:
@@ -124,10 +119,9 @@ class Distributed_Memory(threading.Thread):
                             self._memory.add_episode(episode)
             time.sleep(0.1)
 
-
-    def get_batch(self, bsize, num_batch, num_learner):
+    def get_batch(self, bsize, num_batch, num_learner, time_step):
         with self._lock:
-            return self._memory.get_batch(bsize, num_batch, num_learner)
+            return self._memory.get_batch(bsize, num_batch, num_learner, time_step)
 
     def __len__(self):
         return len(self._memory)
