@@ -1,0 +1,21 @@
+env_path: 'C:/Unity Projects/Hide and Seek/Environments/2.0/Env_Nav_3_Seekers_Big_Rocks_No_Waiting_Time'
+checkpoint_to_load: "Checkpoint_Nav_Distributed_RL_Debug.pth.tar"
+checkpoint_to_save: "Checkpoint_Nav_Distributed_RL_Debug.pth.tar"
+name_tensorboard: "CNN_LSTM_DQN_Nav_Distributed_RL_Hider_Debug"
+memory_size: 5
+device_idx: -1
+resume: False
+total_epochs: 100
+max_steps: 50
+batch_size: 2
+time_step: 30
+learning_rate: 0.00025
+gamma: 0.99
+initial_epsilon: 1.0
+final_epsilon: 0.1
+epsilon_vanish_rate: 0.999
+performance_display_interval(epochs): 5
+checkpoint_save_interval(epochs): 5
+actor_update_freq(epochs): 1
+target_update_freq(epochs): 10
+
