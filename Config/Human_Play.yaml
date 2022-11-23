@@ -1,7 +1,7 @@
 env_path: 'C:/Unity Projects/Hide and Seek/Environments/2.0/Env_Nav_3_Seekers_Big_Rocks_No_Waiting_Time_Topdown_0'
 checkpoint_to_load: "Human_play_Nav_2022-11-22_01-56.pth.tar"
 checkpoint_save_name: "Human_play_Nav"
-total_episodes: 400
+total_episodes: 1
 max_steps: 50
 device_idx: 0
 hostname: 'localhost'
