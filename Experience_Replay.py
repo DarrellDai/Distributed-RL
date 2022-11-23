@@ -1,10 +1,9 @@
-import random
 import _pickle as cPickle
+import random
 import threading
 import time
 from collections import deque
 
-import numpy as np
 import redis
 
 
@@ -33,22 +32,27 @@ class Memory():
                 self.replay_buffer[id].append(episodes[id])
         self.check_dimension()
 
-    def get_batch(self, bsize, num_batch, num_learners, time_step):
+    def get_batch(self, bsize, num_batch, num_learners, sequence_length):
         self.check_dimension()
-        self.check_total_num_vs_needed_for_batch(bsize, num_batch, num_learners)
         batches = []
-        for idx_in_batch in range(num_learners):
+        for learner_idx in range(num_learners):
             batches.append({})
             for id in self.agent_ids:
-                batches[idx_in_batch][id] = []
-        sampled_idx = random.sample(range(len(self)), bsize * num_batch * num_learners)
-        sampled_idx = np.array(sampled_idx).reshape((num_learners, num_batch, bsize))
+                batches[learner_idx][id] = []
+
         for learner_idx in range(num_learners):
             for id in self.agent_ids:
                 for batch_idx in range(num_batch):
                     buffer = []
                     for idx_in_batch in range(bsize):
-                        buffer.append(self.replay_buffer[id][sampled_idx[learner_idx, batch_idx, idx_in_batch]])
+                        sampled_episode_idx = random.randint(0, len(self) - 1)
+                        try:
+                            sampled_time_step = random.randint(0, len(
+                                self.replay_buffer[id][sampled_episode_idx]) - sequence_length - 1)
+                            buffer.append(self.replay_buffer[id][sampled_episode_idx][
+                                          sampled_time_step:sampled_time_step + sequence_length])
+                        except:
+                            buffer.append(self.replay_buffer[id][sampled_episode_idx])
                     batches[learner_idx][id].append(buffer)
         return batches
 
@@ -118,9 +122,9 @@ class Distributed_Memory(threading.Thread):
                             self._memory.add_episode(episode)
             time.sleep(0.1)
 
-    def get_batch(self, bsize, num_batch, num_learner, time_step):
+    def get_batch(self, bsize, num_batch, num_learner, sequence_length):
         with self._lock:
-            return self._memory.get_batch(bsize, num_batch, num_learner, time_step)
+            return self._memory.get_batch(bsize, num_batch, num_learner, sequence_length)
 
     def __len__(self):
         return len(self._memory)

@@ -123,7 +123,7 @@ class Learner:
         elif self.method == "BC":
             self.criterion = nn.CrossEntropyLoss()
 
-    def train(self, batch_size, time_step, gamma, final_epsilon, epsilon_vanish_rate, name_tensorboard,
+    def train(self, batch_size, sequence_length, gamma, final_epsilon, epsilon_vanish_rate, name_tensorboard,
               total_epochs, num_batch_per_learner, actor_update_freq, target_update_freq,
               performance_display_interval, checkpoint_save_interval, checkpoint_to_save):
         if MPI.COMM_WORLD.Get_rank() == 0:
@@ -140,7 +140,7 @@ class Learner:
                 loss_stat[id] = []
             if MPI.COMM_WORLD.Get_rank() == 0:
                 batches = self._memory.get_batch(bsize=batch_size, num_learner=MPI.COMM_WORLD.Get_size(), num_batch=num_batch_per_learner,
-                                                 time_step=time_step)
+                                                 sequence_length=sequence_length)
             batch = MPI.COMM_WORLD.scatter(batches)
             self.learn(batch, gamma, loss_stat)
 
@@ -331,7 +331,7 @@ if __name__ == "__main__":
     learner.initialize_training(initial_learning_rate=run_param["initial_learning_rate"], learning_rate_gamma=run_param["learning_rate_gamma"],
                                 learning_rate_step_size=run_param["learning_rate_step_size"], resume=run_param["resume"],
                                 checkpoint_to_load=run_param["checkpoint_to_load"])
-    learner.train(batch_size=run_param["batch_size"], time_step=run_param["time_step"], gamma=run_param["epsilon_gamma"],
+    learner.train(batch_size=run_param["batch_size"], sequence_length=run_param["sequence_length"], gamma=run_param["epsilon_gamma"],
                   name_tensorboard=run_param["name_tensorboard"],
                   final_epsilon=run_param["final_epsilon"],
                   epsilon_vanish_rate=run_param["epsilon_vanish_rate"],
