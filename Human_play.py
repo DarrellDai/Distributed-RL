@@ -146,6 +146,7 @@ class Human_play:
                 for episode in memory.replay_buffer[id]:
                     if len(episode) == 50:
                         filtered_memory.replay_buffer[id].append(episode)
+                        break
             memory = filtered_memory
         self.connect.set("id_to_name", cPickle.dumps(self.id_to_name))
         self.connect.rpush("experience", cPickle.dumps(memory))
