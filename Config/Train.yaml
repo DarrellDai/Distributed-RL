@@ -8,9 +8,12 @@ resume: False
 total_epochs: 3600
 max_steps: 50
 batch_size: 5
-time_step: 11
-learning_rate: 0.00025
-gamma: 0.99
+num_batch_per_learner: 4
+time_step: 8
+initial_learning_rate: 0.0005
+learning_rate_gamma: 0.2
+learning_rate_step_size: 50
+epsilon_gamma: 0.99
 initial_epsilon: 1.0
 final_epsilon: 0.1
 epsilon_vanish_rate: 0.999
