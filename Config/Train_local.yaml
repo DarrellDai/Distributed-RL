@@ -1,5 +1,5 @@
 env_path: 'C:/Unity Projects/Hide and Seek/Environments/2.0/Env_Nav_3_Seekers_Big_Rocks_No_Waiting_Time'
-checkpoint_to_load: "0_Checkpoint_Nav_Distributed_RL_BC_30"
+checkpoint_to_load: "0_Checkpoint_Nav_Distributed_RL_BC_210"
 checkpoint_to_save: "Checkpoint_Nav_Distributed_RL_BC"
 name_tensorboard: "CNN_LSTM_DQN_Nav_Distributed_RL_Hider_BC"
 memory_size: 1
@@ -12,7 +12,7 @@ num_batch_per_learner: 25
 sequence_length: 5
 initial_learning_rate: 0.00005
 learning_rate_gamma: 0.5
-learning_rate_step_size: 100
+learning_rate_step_size: 25
 epsilon_gamma: 0.99
 initial_epsilon: 1.0
 final_epsilon: 0.1
