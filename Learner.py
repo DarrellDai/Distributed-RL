@@ -199,7 +199,7 @@ class Learner:
                         "episode_count": episode_count,
                         "epoch_count": epoch,
                         "success_count": success_count
-                    }, filename=str(self.instance_idx) + "_" + str(epoch + 1) + checkpoint_to_save +
+                    }, filename=str(self.instance_idx) + "_" + str(epoch + 1) + "_" + checkpoint_to_save +
                                 "_" + str(batch_size) + "_" + str(num_batch_per_learner) + "_" + str(
                         initial_learning_rate) + "_" + str(learning_rate_gamma) + "_" + str(
                         learning_rate_step_size) + ".pth.tar")
