@@ -199,7 +199,10 @@ class Learner:
                         "episode_count": episode_count,
                         "epoch_count": epoch,
                         "success_count": success_count
-                    }, filename=str(self.instance_idx) + "_" + checkpoint_to_save + "_" + str(epoch + 1) + ".pth.tar")
+                    }, filename=str(self.instance_idx) + "_" + str(epoch + 1) + checkpoint_to_save +
+                                "_" + str(batch_size) + "_" + str(num_batch_per_learner) + "_" + str(
+                        initial_learning_rate) + "_" + str(learning_rate_gamma) + "_" + str(
+                        learning_rate_step_size) + ".pth.tar")
 
     def learn(self, batches, gamma, loss_stat):
         for id in self.agent_ids:
@@ -345,7 +348,8 @@ if __name__ == "__main__":
                   final_epsilon=run_param["final_epsilon"],
                   epsilon_vanish_rate=run_param["epsilon_vanish_rate"],
                   initial_learning_rate=run_param["initial_learning_rate"],
-                  learning_rate_gamma=run_param["learning_rate_gamma"], learning_rate_step_size=run_param["learning_rate_step_size"],
+                  learning_rate_gamma=run_param["learning_rate_gamma"],
+                  learning_rate_step_size=run_param["learning_rate_step_size"],
                   total_epochs=run_param["total_epochs"], num_batch_per_learner=run_param["num_batch_per_learner"],
                   actor_update_freq=run_param["actor_update_freq(epochs)"],
                   target_update_freq=run_param["target_update_freq(epochs)"],
