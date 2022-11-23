@@ -1,3 +1,4 @@
+import random
 import _pickle as cPickle
 import threading
 import time
@@ -34,22 +35,20 @@ class Memory():
 
     def get_batch(self, bsize, num_batch, num_learners, time_step):
         self.check_dimension()
+        self.check_total_num_vs_needed_for_batch(bsize, num_batch, num_learners)
         batches = []
         for idx_in_batch in range(num_learners):
             batches.append({})
             for id in self.agent_ids:
                 batches[idx_in_batch][id] = []
+        sampled_idx = random.sample(range(len(self)), bsize * num_batch * num_learners)
+        sampled_idx = np.array(sampled_idx).reshape((num_learners, num_batch, bsize))
         for learner_idx in range(num_learners):
             for id in self.agent_ids:
                 for batch_idx in range(num_batch):
                     buffer = []
                     for idx_in_batch in range(bsize):
-                        sampled_idx = np.random.randint(0, len(self))
-                        try:
-                            point = np.random.randint(0, len(self.replay_buffer[id][sampled_idx]) + 1 - time_step)
-                            buffer.append(self.replay_buffer[id][sampled_idx][point:point + time_step])
-                        except:
-                            buffer.append(self.replay_buffer[id][sampled_idx])
+                        buffer.append(self.replay_buffer[id][sampled_idx[learner_idx, batch_idx, idx_in_batch]])
                     batches[learner_idx][id].append(buffer)
         return batches
 
