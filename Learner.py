@@ -15,7 +15,7 @@ from tqdm import tqdm
 
 from Experience_Replay import Distributed_Memory
 from utils import initialize_model, save_checkpoint, load_checkpoint, wait_until_present, \
-    calculate_loss_from_all_loss_stats, sync_grads
+    calculate_loss_from_all_loss_stats
 
 
 class Learner:
@@ -81,13 +81,15 @@ class Learner:
             model_state_dict[id] = self.main_model[id].state_dict()
         return model_state_dict
 
-    def initialize_training(self, initial_learning_rate, learning_rate_gamma, learning_rate_step_size, checkpoint_to_load=None, resume=False):
+    def initialize_training(self, initial_learning_rate, learning_rate_gamma, learning_rate_step_size,
+                            checkpoint_to_load=None, resume=False):
         self.optimizer = {}
         self.scheduler = {}
         self.initial_epoch_count = None
         for id in self.agent_ids:
             self.optimizer[id] = torch.optim.Adam(self.main_model[id].parameters(), lr=initial_learning_rate)
-            self.scheduler[id] = torch.optim.lr_scheduler.StepLR(self.optimizer[id], step_size=learning_rate_step_size, gamma=learning_rate_gamma,)
+            self.scheduler[id] = torch.optim.lr_scheduler.StepLR(self.optimizer[id], step_size=learning_rate_step_size,
+                                                                 gamma=learning_rate_gamma, )
         if resume:
             if MPI.COMM_WORLD.Get_rank() == 0:
                 model_state_dicts, optimizer_state_dicts, episode_count, self.epsilon, self.initial_epoch_count, success_count = load_checkpoint(
@@ -123,11 +125,14 @@ class Learner:
         elif self.method == "BC":
             self.criterion = nn.CrossEntropyLoss()
 
-    def train(self, batch_size, sequence_length, gamma, final_epsilon, epsilon_vanish_rate, name_tensorboard,
+    def train(self, batch_size, sequence_length, gamma, final_epsilon, epsilon_vanish_rate, initial_learning_rate,
+              learning_rate_gamma, learning_rate_step_size, name_tensorboard,
               total_epochs, num_batch_per_learner, actor_update_freq, target_update_freq,
               performance_display_interval, checkpoint_save_interval, checkpoint_to_save):
         if MPI.COMM_WORLD.Get_rank() == 0:
-            writer = SummaryWriter(os.path.join("runs", str(self.instance_idx) + "_" + name_tensorboard))
+            writer = SummaryWriter(os.path.join("runs", str(self.instance_idx) + "_" + name_tensorboard +
+                                                "_" + str(batch_size) + "_" + str(num_batch_per_learner) + "_" + str(
+                initial_learning_rate) + "_" + str(learning_rate_gamma) + "_" + str(learning_rate_step_size)))
             self._wait_memory()
             counter = tqdm(range(self.initial_epoch_count, total_epochs))
         else:
@@ -139,7 +144,8 @@ class Learner:
             for id in self.agent_ids:
                 loss_stat[id] = []
             if MPI.COMM_WORLD.Get_rank() == 0:
-                batches = self._memory.get_batch(bsize=batch_size, num_learner=MPI.COMM_WORLD.Get_size(), num_batch=num_batch_per_learner,
+                batches = self._memory.get_batch(bsize=batch_size, num_learner=MPI.COMM_WORLD.Get_size(),
+                                                 num_batch=num_batch_per_learner,
                                                  sequence_length=sequence_length)
             batch = MPI.COMM_WORLD.scatter(batches)
             self.learn(batch, gamma, loss_stat)
@@ -328,13 +334,18 @@ if __name__ == "__main__":
     learner.initialize_model(cnn_out_size=model_param["cnn_out_size"], lstm_hidden_size=model_param["lstm_hidden_size"],
                              action_shape=model_param["action_shape"],
                              atten_size=model_param["atten_size"], method=model_param["method"])
-    learner.initialize_training(initial_learning_rate=run_param["initial_learning_rate"], learning_rate_gamma=run_param["learning_rate_gamma"],
-                                learning_rate_step_size=run_param["learning_rate_step_size"], resume=run_param["resume"],
+    learner.initialize_training(initial_learning_rate=run_param["initial_learning_rate"],
+                                learning_rate_gamma=run_param["learning_rate_gamma"],
+                                learning_rate_step_size=run_param["learning_rate_step_size"],
+                                resume=run_param["resume"],
                                 checkpoint_to_load=run_param["checkpoint_to_load"])
-    learner.train(batch_size=run_param["batch_size"], sequence_length=run_param["sequence_length"], gamma=run_param["epsilon_gamma"],
+    learner.train(batch_size=run_param["batch_size"], sequence_length=run_param["sequence_length"],
+                  gamma=run_param["epsilon_gamma"],
                   name_tensorboard=run_param["name_tensorboard"],
                   final_epsilon=run_param["final_epsilon"],
                   epsilon_vanish_rate=run_param["epsilon_vanish_rate"],
+                  initial_learning_rate=run_param["initial_learning_rate"],
+                  learning_rate_gamma=run_param["learning_rate_gamma"], learning_rate_step_size=run_param["learning_rate_step_size"],
                   total_epochs=run_param["total_epochs"], num_batch_per_learner=run_param["num_batch_per_learner"],
                   actor_update_freq=run_param["actor_update_freq(epochs)"],
                   target_update_freq=run_param["target_update_freq(epochs)"],
