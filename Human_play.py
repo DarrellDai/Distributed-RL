@@ -22,11 +22,13 @@ class Human_play:
     def __init__(
             self,
             num_actor=1,
-            device_idx=0
+            device_idx=0,
+            instance_idx=0
     ):
         self.num_actor = num_actor
         self.device_idx = device_idx
         self.device = torch.device('cuda:' + str(device_idx) if torch.cuda.is_available() else 'cpu')
+        self.instance_idx=instance_idx
 
     def initialize_env(self, env_path, max_steps, total_episodes, worker_id):
         unity_env = UnityEnvironment(env_path, worker_id=worker_id)
@@ -120,7 +122,7 @@ class Human_play:
         return mem, num_win
 
     def initialize_server(self, hostname='localhost'):
-        self.connect = redis.Redis(host=hostname)
+        self.connect = redis.Redis(host=hostname, db=self.instance_idx)
 
     def real_time_mode(self, hostname='localhost'):
         self.play_game(real_time_memory_sync=True, hostname=hostname)
@@ -188,11 +190,12 @@ if __name__ == "__main__":
     parser.add_argument('-m', '--mode', type=str, default='s',
                         help="Runing mode. s:save_mode, l:load_mode, r: real time mode")
     parser.add_argument('-rc', '--run_config', type=str, default='Human_Play.yaml', help="Running config file name")
+    parser.add_argument('-ins', '--instance_idx', type=int, default=0, help="The index of instance to run")
     parser.add_argument('-w', '--worker', type=int, default=0, help="Worker id to run the environment")
     args = parser.parse_args()
     with open("Config/" + args.run_config) as file:
         param = yaml.safe_load(file)
-    human_play = Human_play(device_idx=param["device_idx"])
+    human_play = Human_play(device_idx=param["device_idx"], instance_idx=args.instance_idx)
     if args.mode == 'l':
         human_play.load_mode(memsize=param["total_episodes"], max_steps=param["max_steps"],
                              checkpoint_name=param["checkpoint_to_load"], hostname=param["hostname"],
