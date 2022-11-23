@@ -45,7 +45,7 @@ class Network(nn.Module):
             shape: (bsize, action_shape[0], action_shape[1], ...)
     '''
 
-    def forward(self, obs, hidden_state, cell_state, lstm_out):
+    def forward(self, obs, hidden_state, cell_state):
         bsize = obs.shape[0]
         obs = obs / 255
         if len(obs.shape) == 5:
@@ -56,8 +56,7 @@ class Network(nn.Module):
             raise RuntimeError("The observation shape must be (bsize, time_step, width, height, (channel)")
         resnet_out = self.resnet(obs)
         resnet_out = resnet_out.view(bsize, int(obs.shape[0] / bsize), -1)
-        lstm_out, (hidden_state, cell_state) = self.lstm(resnet_out, hidden_state, cell_state,
-                                                         lstm_out)
+        lstm_out, (hidden_state, cell_state) = self.lstm(resnet_out, hidden_state, cell_state)
         # todo: original code here mignt not cosider the atten_size in dqn_out
         network_out = self.fc(lstm_out[:, -1, :])
         network_out = network_out.view((bsize,) + self.action_shape)

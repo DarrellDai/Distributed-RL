@@ -77,19 +77,18 @@ class Actor:
             act[id] = torch.tensor(act[id]).reshape(1, 1, len(act[id])).to(self.device)
         return act
 
-    def find_best_action_by_model(self, prev_obs, hidden_state, cell_state, lstm_out):
+    def find_best_action_by_model(self, prev_obs, hidden_state, cell_state):
         act = {}
         for id in self.agent_ids:
             prev_obs[id][0] = prev_obs[id][0].reshape(1, 1, prev_obs[id][0].shape[0], prev_obs[id][0].shape[1],
                                                       prev_obs[id][0].shape[2])
-            lstm_out[id], (hidden_state[id], cell_state[id]), dqn_out = self.model[id](prev_obs[id][0],
-                                                                                       hidden_state=
-                                                                                       hidden_state[id],
-                                                                                       cell_state=
-                                                                                       cell_state[id],
-                                                                                       lstm_out=lstm_out[id])
+            _, (hidden_state[id], cell_state[id]), network_out = self.model[id](prev_obs[id][0],
+                                                                            hidden_state=
+                                                                            hidden_state[id],
+                                                                            cell_state=
+                                                                            cell_state[id])
 
-            act[id] = find_optimal_action(dqn_out)
+            act[id] = find_optimal_action(network_out)
             act[id] = torch.from_numpy(act[id]).to(self.device)
             # todo:might be problems here
             # hidden_state[id], cell_state[id], lo_new = find_hidden_cell_out_of_an_action(act[id],
@@ -97,7 +96,7 @@ class Actor:
             #                                                                              cell_state_per_action,
             #                                                                              out_per_action)
             # lstm_out[id] = combine_out(lo, lo_new.to(self.device), self.atten_size[id])
-        return act, hidden_state, cell_state, lstm_out
+        return act, hidden_state, cell_state
 
     def collect_data(self, env, max_steps, name_tensorboard, actor_idx, mode):
         if actor_idx == 0:
@@ -126,7 +125,7 @@ class Actor:
                 total_reward[id] = 0
                 local_memory[id] = []
                 alive[id] = True
-                hidden_state[id], cell_state[id], lstm_out[id] = self.model[
+                hidden_state[id], cell_state[id] = self.model[
                     id].lstm.init_hidden_states_and_outputs(
                     bsize=1)
             done = False
@@ -135,14 +134,12 @@ class Actor:
                     prev_obs[id][0] = torch.from_numpy(prev_obs[id][0]).float().to(self.device)
                     hidden_state[id] = hidden_state[id].to(self.device)
                     cell_state[id] = cell_state[id].to(self.device)
-                    lstm_out[id] = lstm_out[id].to(self.device)
                 step_count += 1
                 with torch.no_grad():
                     with threading.Lock():
-                        act, hidden_state, cell_state, lstm_out = self.find_best_action_by_model(prev_obs,
-                                                                                                 hidden_state,
-                                                                                                 cell_state,
-                                                                                                 lstm_out)
+                        act, hidden_state, cell_state = self.find_best_action_by_model(prev_obs,
+                                                                                       hidden_state,
+                                                                                       cell_state)
                         if np.random.rand(1) < epsilon:
                             act = self.find_random_action(env)
                     obs_dict, reward_dict, done_dict, info_dict = env.step(act)
@@ -243,7 +240,8 @@ if __name__ == "__main__":
     actor.initialize_model(cnn_out_size=model_param["cnn_out_size"], lstm_hidden_size=model_param["lstm_hidden_size"],
                            action_shape=model_param["action_shape"],
                            atten_size=model_param["atten_size"],
-                           mode=args.mode, checkpoint_to_load=run_param["checkpoint_to_load"], method=model_param["method"])
+                           mode=args.mode, checkpoint_to_load=run_param["checkpoint_to_load"],
+                           method=model_param["method"])
     threads = []
     for i in range(args.num_actors):
         if i == 0:

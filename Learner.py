@@ -87,7 +87,7 @@ class Learner:
         self.initial_epoch_count = None
         for id in self.agent_ids:
             self.optimizer[id] = torch.optim.Adam(self.main_model[id].parameters(), lr=learning_rate)
-            self.scheduler[id] = torch.optim.lr_scheduler.StepLR(self.optimizer[id], step_size=25, gamma=0.1)
+            self.scheduler[id] = torch.optim.lr_scheduler.StepLR(self.optimizer[id], step_size=100, gamma=0.2)
         if resume:
             if MPI.COMM_WORLD.Get_rank() == 0:
                 model_state_dicts, optimizer_state_dicts, episode_count, self.epsilon, self.initial_epoch_count, success_count = load_checkpoint(
@@ -139,7 +139,7 @@ class Learner:
             for id in self.agent_ids:
                 loss_stat[id] = []
             if MPI.COMM_WORLD.Get_rank() == 0:
-                batches = self._memory.get_batch(bsize=batch_size, num_learner=MPI.COMM_WORLD.Get_size(), num_batch=4,
+                batches = self._memory.get_batch(bsize=batch_size, num_learner=MPI.COMM_WORLD.Get_size(), num_batch=50,
                                                  time_step=time_step)
             batch = MPI.COMM_WORLD.scatter(batches)
             self.learn(batch, gamma, loss_stat)
@@ -202,17 +202,15 @@ class Learner:
                 pred_values = []
                 target_values = []
                 for episode_idx in range(len(batch)):
-                    hidden_state, cell_state, out = self.main_model[id].lstm.init_hidden_states_and_outputs(
+                    hidden_state, cell_state = self.main_model[id].lstm.init_hidden_states_and_outputs(
                         bsize=1)
                     hidden_state = hidden_state.to(self.device)
                     cell_state = cell_state.to(self.device)
-                    out = out.to(self.device)
-                    hidden_state_target, cell_state_target, out_target = self.main_model[
+                    hidden_state_target, cell_state_target = self.main_model[
                         id].lstm.init_hidden_states_and_outputs(
                         bsize=1)
                     hidden_state_target = hidden_state_target.to(self.device)
                     cell_state_target = cell_state_target.to(self.device)
-                    out_target = out_target.to(self.device)
                     act, current_vector_obs, current_visual_obs, next_vector_obs, next_visual_obs, rewards = self.preprocess_data_from_batch(
                         batch)
                     act_per_episode, current_visual_obs_per_episode, current_vector_obs_per_episode, rewards_per_episode, visual_obs_per_episode, next_vector_obs_per_episode = self.extract_input_per_episode(
@@ -224,39 +222,28 @@ class Learner:
                             if next_vector_obs_per_episode[t][0] == 0:
                                 Q_next_max = 0
                             else:
-                                if t == 0:
-                                    out_target, (hidden_state_target, cell_state_target), Q_next = self.target_model[
-                                        id](
-                                        visual_obs_per_episode[:, t:t + 2],
-                                        hidden_state=hidden_state_target,
-                                        cell_state=cell_state_target,
-                                        lstm_out=out_target)
-                                else:
-                                    out_target, (hidden_state_target, cell_state_target), Q_next = self.target_model[
-                                        id](
-                                        visual_obs_per_episode[:, t + 1:t + 2],
-                                        hidden_state=hidden_state_target,
-                                        cell_state=cell_state_target,
-                                        lstm_out=out_target)
+                                out_target, (hidden_state_target, cell_state_target), Q_next = self.target_model[
+                                    id](
+                                    visual_obs_per_episode[:, t + 1:t + 2],
+                                    hidden_state=hidden_state_target,
+                                    cell_state=cell_state_target)
                                 Q_next_max = torch.max(Q_next.reshape(-1).detach())
                             out, (hidden_state, cell_state), Q_s = self.main_model[id](
                                 current_visual_obs_per_episode[:, t:t + 1],
-                                hidden_state=hidden_state, cell_state=cell_state,
-                                lstm_out=out)
+                                hidden_state=hidden_state, cell_state=cell_state)
 
                         elif self.method == "BC":
                             out, (hidden_state, cell_state), act_prob = self.main_model[id](
                                 current_visual_obs_per_episode[:, t:t + 1],
-                                hidden_state=hidden_state, cell_state=cell_state,
-                                lstm_out=out)
-                    if self.method == "DQN":
-                        pred_values.append(Q_s[0][tuple(np.array(act_per_episode[0, t].cpu()) + 1)])
-                        target_values.append(rewards_per_episode[t] + (gamma * Q_next_max))
-                    elif self.method == "BC":
-                        pred_values.append(act_prob.view(-1))
-                        target_values.append(torch.tensor(
-                            np.ravel_multi_index(np.array(act_per_episode[0, t].cpu()) + 1,
-                                                 act_prob[0].shape)).detach())
+                                hidden_state=hidden_state, cell_state=cell_state)
+                        if self.method == "DQN":
+                            pred_values.append(Q_s[0][tuple(np.array(act_per_episode[0, t].cpu()) + 1)])
+                            target_values.append(rewards_per_episode[t] + (gamma * Q_next_max))
+                        elif self.method == "BC":
+                            pred_values.append(act_prob.view(-1))
+                            target_values.append(torch.tensor(
+                                np.ravel_multi_index(np.array(act_per_episode[0, t].cpu()) + 1,
+                                                     act_prob[0].shape)).detach())
 
                 pred_values = torch.stack(pred_values)
                 target_values = torch.stack(target_values).to(self.device)
@@ -347,7 +334,8 @@ if __name__ == "__main__":
                   name_tensorboard=run_param["name_tensorboard"],
                   final_epsilon=run_param["final_epsilon"],
                   epsilon_vanish_rate=run_param["epsilon_vanish_rate"],
-                  total_epochs=run_param["total_epochs"], actor_update_freq=run_param["actor_update_freq(epochs)"],
+                  total_epochs=run_param["total_epochs"],
+                  actor_update_freq=run_param["actor_update_freq(epochs)"],
                   target_update_freq=run_param["target_update_freq(epochs)"],
                   performance_display_interval=run_param["performance_display_interval(epochs)"],
                   checkpoint_save_interval=run_param["checkpoint_save_interval(epochs)"],
