@@ -122,7 +122,6 @@ class Human_play:
     def initialize_server(self, hostname='localhost'):
         self.connect = redis.Redis(host=hostname)
 
-
     def real_time_mode(self, hostname='localhost'):
         self.play_game(real_time_memory_sync=True, hostname=hostname)
 
@@ -137,17 +136,23 @@ class Human_play:
                                                                                                      14:16] + ".pth.tar"
         save_checkpoint({"memory": mem, "num_win": num_win, "id_to_name": self.id_to_name}, filename=filename)
 
-    def load_mode(self, checkpoint_name, hostname='localhost', mode="all"):
+    def load_mode(self, checkpoint_name, memsize, max_steps=0, hostname='localhost', mode="all"):
         self.initialize_server(hostname)
         memory, self.id_to_name, _ = self.load_checkpoint(checkpoint_name)
-        if mode == "success_only":
-            filtered_memory = Memory(memsize=50, agent_ids=memory.agent_ids)
-            for id in self.id_to_name:
-                for episode in memory.replay_buffer[id]:
-                    if len(episode) == 50:
+        filtered_memory = Memory(memsize=memsize, agent_ids=memory.agent_ids)
+        for id in self.id_to_name:
+            stored_memory = 0
+            for episode in memory.replay_buffer[id]:
+                if mode == "success_only":
+                    if len(episode) == max_steps:
                         filtered_memory.replay_buffer[id].append(episode)
-                        break
-            memory = filtered_memory
+                        stored_memory += 1
+                else:
+                    filtered_memory.replay_buffer[id].append(episode)
+                    stored_memory += 1
+                if stored_memory == memsize:
+                    break
+        memory = filtered_memory
         self.connect.set("id_to_name", cPickle.dumps(self.id_to_name))
         self.connect.rpush("experience", cPickle.dumps(memory))
         with self.connect.lock("Update"):
@@ -189,7 +194,8 @@ if __name__ == "__main__":
         param = yaml.safe_load(file)
     human_play = Human_play(device_idx=param["device_idx"])
     if args.mode == 'l':
-        human_play.load_mode(checkpoint_name=param["checkpoint_to_load"], hostname=param["hostname"],
+        human_play.load_mode(memsize=param["total_episodes"], max_steps=param["max_steps"],
+                             checkpoint_name=param["checkpoint_to_load"], hostname=param["hostname"],
                              mode=param["mode"])
     else:
         human_play.initialize_env(env_path=param["env_path"], max_steps=param["max_steps"],
