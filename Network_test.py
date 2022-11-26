@@ -1,7 +1,7 @@
 import numpy as np
 import torch
 
-from Network import Network
+from Encoder import Encoder
 import torch.optim as optim
 import redis
 import _pickle as cPickle
@@ -13,7 +13,7 @@ obs = np.repeat(obs[np.newaxis, ...], time_step, 0)
 obs = np.repeat(obs[np.newaxis, ...], bsize, 0)
 obs = torch.tensor(obs).float().to(device)
 act = torch.zeros((bsize, time_step-1, 2)).float().to(device)
-network = Network(cnn_out_size=100, action_out_size=16, lstm_hidden_size=15, action_space_shape=(2, 3), atten_size=7)
+network = Encoder(cnn_out_size=100, action_out_size=16, lstm_hidden_size=15, action_shape=(2, 3), atten_size=7)
 connect=redis.Redis("localhost")
 connect.rpush("netwrok", cPickle.dumps(network.state_dict()))
 optimizer = optim.SGD(network.parameters(), lr=0.001, momentum=0.9)
