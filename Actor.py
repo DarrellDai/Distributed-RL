@@ -82,7 +82,7 @@ class Actor:
         for id in self.agent_ids:
             prev_obs[id][0] = prev_obs[id][0].reshape(1, 1, prev_obs[id][0].shape[0], prev_obs[id][0].shape[1],
                                                       prev_obs[id][0].shape[2])
-            _, (hidden_state[id], cell_state[id]), network_out = self.modesl[id].evaluate(prev_obs[id][0],
+            _, (hidden_state[id], cell_state[id]), network_out = self.models[id].evaluate(prev_obs[id][0],
                                                                             hidden_state=
                                                                             hidden_state[id],
                                                                             cell_state=
@@ -125,15 +125,13 @@ class Actor:
                 total_reward[id] = 0
                 local_memory[id] = []
                 alive[id] = True
-                hidden_state[id], cell_state[id] = self.model[
-                    id].lstm.init_hidden_states_and_outputs(
-                    bsize=1)
+                hidden_state[id], cell_state[id] = self.models[
+                    id].get_initial_value(bsize=1)
+                hidden_state[id], cell_state[id] = hidden_state[id].to(self.device), cell_state[id].to(self.device)
             done = False
             while step_count < max_steps and not done:
                 for id in self.agent_ids:
                     prev_obs[id][0] = torch.from_numpy(prev_obs[id][0]).float().to(self.device)
-                    hidden_state[id] = hidden_state[id].to(self.device)
-                    cell_state[id] = cell_state[id].to(self.device)
                 step_count += 1
                 with torch.no_grad():
                     with threading.Lock():

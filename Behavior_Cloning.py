@@ -35,14 +35,16 @@ class Behavior_Cloning(nn.Module):
         act_prob = self.bc(lstm_out[:, -1, :])
         act_prob = act_prob.view((bsize,) + self.action_shape)
         return lstm_out, (hidden_state, cell_state), act_prob
-    def evaluate(self, obs):
-        return self(obs)
+    def evaluate(self, obs, hidden_state, cell_state):
+        return self(obs, hidden_state, cell_state)
     def initialize_training(self, initial_learning_rate, learning_rate_step_size, learning_rate_gamma):
         self.optimizer = torch.optim.Adam(self.parameters(), lr=initial_learning_rate)
         self.scheduler = torch.optim.lr_scheduler.StepLR(self.optimizer, step_size=learning_rate_step_size,
                                                          gamma=learning_rate_gamma)
         self.criterion = nn.CrossEntropyLoss()
-
+    def get_initial_value(self, bsize):
+        hidden_state, cell_state=self.encoder.lstm.init_hidden_states_and_outputs(bsize)
+        return hidden_state, cell_state
     def learn(self, batches, epoch):
         loss_stat = {}
         loss_stat["BC_loss"] = []
