@@ -2,17 +2,15 @@ import _pickle as cPickle
 import argparse
 import os
 import time
-from copy import deepcopy
 
-import numpy as np
 import redis
 import torch
-import torch.nn as nn
 import yaml
 from mpi4py import MPI
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
+from Behavior_Cloning import Behavior_Cloning
 from Experience_Replay import Distributed_Memory
 from utils import initialize_model, save_checkpoint, load_checkpoint, wait_until_present, \
     calculate_loss_from_all_loss_stats
@@ -29,6 +27,7 @@ class Learner:
             self._connect = redis.Redis(host=hostname, db=self.instance_idx)
             self._connect.delete("id_to_name")
             self._connect.delete("params")
+            self._connect.delete("optimizer")
             self._connect.delete("epsilon")
             self._connect.delete("success_count")
             self._connect.delete("episode_count")
@@ -59,8 +58,7 @@ class Learner:
             last_length = len(self._memory)
             time.sleep(0.1)
 
-    def initialize_model(self, cnn_out_size, lstm_hidden_size, action_shape, atten_size, method="DQN"):
-        self.method = method
+    def initialize_model(self, cnn_out_size, lstm_hidden_size, action_shape, atten_size, method):
         self.id_to_name = None
         self.agent_ids = None
         if MPI.COMM_WORLD.Get_rank() == 0:
@@ -72,25 +70,27 @@ class Learner:
             self._memory.start()
         self.id_to_name = MPI.COMM_WORLD.bcast(self.id_to_name)
         self.agent_ids = MPI.COMM_WORLD.bcast(self.agent_ids)
-        self.main_model = initialize_model(self.agent_ids, cnn_out_size, lstm_hidden_size, action_shape,
-                                           atten_size, self.device, method)
+        self.models = initialize_model(self.agent_ids, cnn_out_size, lstm_hidden_size, action_shape,
+                                       atten_size, self.device, method)
 
-    def get_model_state_dict(self):
-        model_state_dict = {}
+    def get_model_state_dicts(self):
+        model_state_dicts = {}
         for id in self.agent_ids:
-            model_state_dict[id] = self.main_model[id].state_dict()
-        return model_state_dict
+            model_state_dicts[id] = self.models[id].get_model_state_dict()
+        return model_state_dicts
+
+    def get_optimizer_state_dicts(self):
+        optimizer_state_dicts = {}
+        for id in self.agent_ids:
+            optimizer_state_dicts[id] = self.models[id].get_optimizer_state_dict()
+        return optimizer_state_dicts
 
     def initialize_training(self, initial_learning_rate, learning_rate_gamma, learning_rate_step_size,
                             checkpoint_to_load=None, resume=False):
-        self.optimizer = {}
-        self.scheduler = {}
-        self.initial_epoch_count = None
         for id in self.agent_ids:
-            self.optimizer[id] = torch.optim.Adam(self.main_model[id].parameters(), lr=initial_learning_rate)
-            self.scheduler[id] = torch.optim.lr_scheduler.StepLR(self.optimizer[id], step_size=learning_rate_step_size,
-                                                                 gamma=learning_rate_gamma, )
+            self.models[id].initialize_training(initial_learning_rate, learning_rate_step_size, learning_rate_gamma)
         if resume:
+            self.initial_epoch_count = None
             if MPI.COMM_WORLD.Get_rank() == 0:
                 model_state_dicts, optimizer_state_dicts, episode_count, self.epsilon, self.initial_epoch_count, success_count = load_checkpoint(
                     checkpoint_to_load + ".pth.tar", self.device)
@@ -100,34 +100,27 @@ class Learner:
                 self._connect.set("epsilon", cPickle.dumps(self.epsilon))
                 self._connect.set("success_count", cPickle.dumps(success_count))
                 self._connect.set("epoch", cPickle.dumps(self.initial_epoch_count))
-                for id in self.agent_ids:
-                    self.main_model[id].load_state_dict(model_state_dicts[id])
-                    self.optimizer[id].load_state_dict(optimizer_state_dicts[id])
-                self._connect.set("params", cPickle.dumps(self.get_model_state_dict()))
+                self._connect.set("params", cPickle.dumps(model_state_dicts))
+                self._connect.set("optimizer", cPickle.dumps(optimizer_state_dicts))
 
             self.epsilon = MPI.COMM_WORLD.bcast(self.epsilon)
             self.initial_epoch_count = MPI.COMM_WORLD.bcast(self.initial_epoch_count)
             for id in self.agent_ids:
-                self.main_model[id].load_state_dict(MPI.COMM_WORLD.bcast(self.main_model[id].state_dict()))
+                self.models[id].load_model_and_optimizer_state_dict(
+                    MPI.COMM_WORLD.bcast(model_state_dicts[id]), MPI.COMM_WORLD.bcast(optimizer_state_dicts[id]))
 
-                self.optimizer[id].load_state_dict(MPI.COMM_WORLD.bcast(self.optimizer[id].state_dict()))
         else:
             if MPI.COMM_WORLD.Get_rank() == 0:
                 self._connect.set("episode_count", cPickle.dumps(0))
                 self._connect.set("epsilon", cPickle.dumps(1))
                 self._connect.set("success_count", cPickle.dumps(0))
                 self._connect.set("epoch", cPickle.dumps(0))
-                self._connect.set("params", cPickle.dumps(self.get_model_state_dict()))
+                self._connect.set("params", cPickle.dumps(self.get_model_state_dicts()))
             self.initial_epoch_count = 0
-        if self.method == "DQN":
-            self.criterion = nn.MSELoss()
-            self.target_model = deepcopy(self.main_model)
-        elif self.method == "BC":
-            self.criterion = nn.CrossEntropyLoss()
 
-    def train(self, batch_size, sequence_length, gamma, final_epsilon, epsilon_vanish_rate, initial_learning_rate,
+    def train(self, batch_size, sequence_length, final_epsilon, epsilon_vanish_rate, initial_learning_rate,
               learning_rate_gamma, learning_rate_step_size, name_tensorboard,
-              total_epochs, num_batch_per_learner, actor_update_freq, target_update_freq,
+              total_epochs, num_batch_per_learner, actor_update_freq,
               performance_display_interval, checkpoint_save_interval, checkpoint_to_save):
         if MPI.COMM_WORLD.Get_rank() == 0:
             writer = SummaryWriter(os.path.join("runs", str(self.instance_idx) + "_" + name_tensorboard +
@@ -137,22 +130,25 @@ class Learner:
             counter = tqdm(range(self.initial_epoch_count, total_epochs))
         else:
             counter = range(self.initial_epoch_count, total_epochs)
-        loss_stat = {}
+        loss_stats = {}
         batches = None
 
         for epoch in counter:
             for id in self.agent_ids:
-                loss_stat[id] = []
+                loss_stats[id] = {}
             if MPI.COMM_WORLD.Get_rank() == 0:
                 batches = self._memory.get_batch(bsize=batch_size, num_learner=MPI.COMM_WORLD.Get_size(),
                                                  num_batch=num_batch_per_learner,
                                                  sequence_length=sequence_length)
-            batch = MPI.COMM_WORLD.scatter(batches)
-            self.learn(batch, gamma, loss_stat)
+            batches_per_learner = MPI.COMM_WORLD.scatter(batches)
+            for id in self.agent_ids:
+                loss_stat = self.models[id].learn(batches_per_learner[id], epoch)
+                for key in loss_stat:
+                    loss_stats[id][key] = loss_stat[key]
 
-            loss_stats = MPI.COMM_WORLD.gather(loss_stat)
+            loss_stats_all_learner = MPI.COMM_WORLD.gather(loss_stats)
             if MPI.COMM_WORLD.Get_rank() == 0:
-                loss = calculate_loss_from_all_loss_stats(loss_stats, self.agent_ids)
+                loss = calculate_loss_from_all_loss_stats(loss_stats_all_learner, self.agent_ids)
                 with self._connect.lock("Update"):
                     self._connect.set("epoch", cPickle.dumps(epoch))
                     self._connect.set("epsilon", cPickle.dumps(self.epsilon))
@@ -163,35 +159,38 @@ class Learner:
                     episode_count = cPickle.loads(self._connect.get("episode_count"))
                     # print("Learner got episode_count")
                 if (epoch + 1) % performance_display_interval == 0:
+                    optimizer_state_dicts = self.get_optimizer_state_dicts()
                     for id in self.agent_ids:
-                        print('\n Epoch: [%d | %d] LR: %.16f Epsilon : %f \n' % (
-                            epoch, total_epochs, self.optimizer[id].param_groups[0]["lr"], self.epsilon))
-                        print('\n Agent %d, Loss: %f \n' % (id, loss[id]))
+                        for key in optimizer_state_dicts[id]:
+                            print('\n Epoch: [%d | %d] LR (%s): %.16f Epsilon : %f \n' % (
+                                epoch, total_epochs, key, optimizer_state_dicts[id][key]['param_groups'][0]["lr"],
+                                self.epsilon))
+                        for key in loss[id]:
+                            print('\n Agent %d, Loss (%s): %f \n' % (id, key, loss[id][key]))
                 for id in self.agent_ids:
                     # todo: success_count should be associated to player type
                     if episode_count != 0:
                         writer.add_scalar(self.id_to_name[id] + ": Success Rate vs Epoch",
                                           success_count / episode_count,
                                           epoch)
-                    writer.add_scalar(self.id_to_name[id] + ": Loss vs Epoch", loss[id], epoch)
+                    for loss_name in loss[id]:
+                        writer.add_scalar(self.id_to_name[id] + ": Loss vs Epoch", loss[id][loss_name], epoch)
                 writer.flush()
 
                 if epoch % actor_update_freq == 0:
                     with self._connect.lock("Update params"):
-                        self._connect.set("params", cPickle.dumps(self.get_model_state_dict()))
+                        self._connect.set("params", cPickle.dumps(self.get_model_state_dicts()))
                         self._connect.set("to_update", cPickle.dumps(True))
                 if self.epsilon > final_epsilon:
                     self.epsilon *= epsilon_vanish_rate
 
-                if (epoch + 1) % target_update_freq == 0 and self.method == "DQN":
-                    for id in self.agent_ids:
-                        self.target_model[id].load_state_dict(self.main_model[id].state_dict())
+                # #todo:not only first learner do this, but all
+                # if (epoch + 1) % target_update_freq == 0 and self.method == "DQN":
+                #     for id in self.agent_ids:
+                #         self.target_model[id].load_state_dict(self.models[id].state_dict())
                 if (epoch + 1) % checkpoint_save_interval == 0:
-                    model_state_dicts = {}
-                    optimizer_state_dicts = {}
-                    for id in self.agent_ids:
-                        model_state_dicts[id] = self.main_model[id].state_dict()
-                        optimizer_state_dicts[id] = self.optimizer[id].state_dict()
+                    model_state_dicts = self.get_model_state_dicts()
+                    optimizer_state_dicts = self.get_optimizer_state_dicts()
                     save_checkpoint({
                         'model_state_dicts': model_state_dicts,
                         'optimizer_state_dicts': optimizer_state_dicts,
@@ -203,122 +202,6 @@ class Learner:
                                 "_" + str(batch_size) + "_" + str(num_batch_per_learner) + "_" + str(
                         initial_learning_rate) + "_" + str(learning_rate_gamma) + "_" + str(
                         learning_rate_step_size) + ".pth.tar")
-
-    def learn(self, batches, gamma, loss_stat):
-        for id in self.agent_ids:
-            for batch in batches[id]:
-
-                pred_values = []
-                target_values = []
-                for episode_idx in range(len(batch)):
-                    hidden_state, cell_state = self.main_model[id].lstm.init_hidden_states_and_outputs(
-                        bsize=1)
-                    hidden_state = hidden_state.to(self.device)
-                    cell_state = cell_state.to(self.device)
-                    hidden_state_target, cell_state_target = self.main_model[
-                        id].lstm.init_hidden_states_and_outputs(
-                        bsize=1)
-                    hidden_state_target = hidden_state_target.to(self.device)
-                    cell_state_target = cell_state_target.to(self.device)
-                    act, current_vector_obs, current_visual_obs, next_vector_obs, next_visual_obs, rewards = self.preprocess_data_from_batch(
-                        batch)
-                    act_per_episode, current_visual_obs_per_episode, current_vector_obs_per_episode, rewards_per_episode, visual_obs_per_episode, next_vector_obs_per_episode = self.extract_input_per_episode(
-                        act, episode_idx, current_vector_obs, current_visual_obs, next_vector_obs, next_visual_obs,
-                        rewards)
-
-                    for t in range(len(batch[episode_idx])):
-                        if self.method == "DQN":
-                            if next_vector_obs_per_episode[t][0] == 0:
-                                Q_next_max = 0
-                            else:
-                                out_target, (hidden_state_target, cell_state_target), Q_next = self.target_model[
-                                    id](
-                                    visual_obs_per_episode[:, t + 1:t + 2],
-                                    hidden_state=hidden_state_target,
-                                    cell_state=cell_state_target)
-                                Q_next_max = torch.max(Q_next.reshape(-1).detach())
-                            out, (hidden_state, cell_state), Q_s = self.main_model[id](
-                                current_visual_obs_per_episode[:, t:t + 1],
-                                hidden_state=hidden_state, cell_state=cell_state)
-
-                        elif self.method == "BC":
-                            out, (hidden_state, cell_state), act_prob = self.main_model[id](
-                                current_visual_obs_per_episode[:, t:t + 1],
-                                hidden_state=hidden_state, cell_state=cell_state)
-                        if self.method == "DQN":
-                            pred_values.append(Q_s[0][tuple(np.array(act_per_episode[0, t].cpu()) + 1)])
-                            target_values.append(rewards_per_episode[t] + (gamma * Q_next_max))
-                        elif self.method == "BC":
-                            pred_values.append(act_prob.view(-1))
-                            target_values.append(torch.tensor(
-                                np.ravel_multi_index(np.array(act_per_episode[0, t].cpu()) + 1,
-                                                     act_prob[0].shape)).detach())
-
-                pred_values = torch.stack(pred_values)
-                target_values = torch.stack(target_values).to(self.device)
-
-                loss = self.criterion(pred_values, target_values)
-
-                #  save performance measure
-                loss_stat[id].append(loss.item())
-
-                # make previous grad zero
-                self.optimizer[id].zero_grad()
-
-                # backward
-                loss.backward()
-
-                # # Synchronize gradients from all learners
-                # sync_grads(self.main_model[id])
-                # update params
-                self.optimizer[id].step()
-
-                # release memory
-                torch.cuda.empty_cache()
-
-            self.scheduler[id].step()
-
-    def preprocess_data_from_batch(self, batch):
-        current_visual_obs = []
-        current_vector_obs = []
-        act = []
-        rewards = []
-        next_visual_obs = []
-        next_vector_obs = []
-        for b in batch:
-            cvis, cves, ac, rw, nvis, nves = [], [], [], [], [], []
-            for element in b:
-                cvis.append(element[0][0])
-                cves.append(element[0][1])
-                ac.append(element[1])
-                rw.append(element[2])
-                nvis.append(element[3][0])
-                nves.append(element[3][1])
-            current_visual_obs.append(cvis)
-            current_vector_obs.append(cves)
-            act.append(ac)
-            rewards.append(rw)
-            next_visual_obs.append(nvis)
-            next_vector_obs.append(nves)
-        return act, current_vector_obs, current_visual_obs, next_vector_obs, next_visual_obs, rewards
-
-    def extract_input_per_episode(self, act, batch_idx, current_vector_obs, current_visual_obs, next_vector_obs,
-                                  next_visual_obs,
-                                  rewards):
-        current_visual_obs_per_episode = np.array(current_visual_obs[batch_idx])
-        current_vector_obs_per_episode = np.array(current_vector_obs[batch_idx])
-        act_per_episode = np.array(act[batch_idx])
-        rewards_per_episode = np.array(rewards[batch_idx])
-        next_visual_obs_per_episode = np.array(next_visual_obs[batch_idx])
-        next_vector_obs_per_episode = np.array(next_vector_obs[batch_idx])
-        current_visual_obs_per_episode = torch.from_numpy(current_visual_obs_per_episode).float().to(
-            self.device).unsqueeze(0)
-        next_visual_obs_per_episode = torch.from_numpy(next_visual_obs_per_episode).float().to(
-            self.device).unsqueeze(0)
-        act_per_episode = torch.from_numpy(act_per_episode).long().to(self.device).unsqueeze(0)
-        rewards_per_episode = torch.from_numpy(rewards_per_episode).float().to(self.device)
-        visual_obs_per_episode = torch.concat((current_visual_obs_per_episode, next_visual_obs_per_episode[:, -1:]), 1)
-        return act_per_episode, current_visual_obs_per_episode, current_vector_obs_per_episode, rewards_per_episode, visual_obs_per_episode, next_vector_obs_per_episode
 
 
 if __name__ == "__main__":
@@ -336,14 +219,13 @@ if __name__ == "__main__":
                       hostname=args.redisserver, device_idx=run_param["device_idx"], instance_idx=args.instance_idx)
     learner.initialize_model(cnn_out_size=model_param["cnn_out_size"], lstm_hidden_size=model_param["lstm_hidden_size"],
                              action_shape=model_param["action_shape"],
-                             atten_size=model_param["atten_size"], method=model_param["method"])
+                             atten_size=model_param["atten_size"], method=Behavior_Cloning)
     learner.initialize_training(initial_learning_rate=run_param["initial_learning_rate"],
                                 learning_rate_gamma=run_param["learning_rate_gamma"],
                                 learning_rate_step_size=run_param["learning_rate_step_size"],
                                 resume=run_param["resume"],
                                 checkpoint_to_load=run_param["checkpoint_to_load"])
     learner.train(batch_size=run_param["batch_size"], sequence_length=run_param["sequence_length"],
-                  gamma=run_param["epsilon_gamma"],
                   name_tensorboard=run_param["name_tensorboard"],
                   final_epsilon=run_param["final_epsilon"],
                   epsilon_vanish_rate=run_param["epsilon_vanish_rate"],
@@ -352,7 +234,6 @@ if __name__ == "__main__":
                   learning_rate_step_size=run_param["learning_rate_step_size"],
                   total_epochs=run_param["total_epochs"], num_batch_per_learner=run_param["num_batch_per_learner"],
                   actor_update_freq=run_param["actor_update_freq(epochs)"],
-                  target_update_freq=run_param["target_update_freq(epochs)"],
                   performance_display_interval=run_param["performance_display_interval(epochs)"],
                   checkpoint_save_interval=run_param["checkpoint_save_interval(epochs)"],
                   checkpoint_to_save=run_param["checkpoint_to_save"])

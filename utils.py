@@ -8,17 +8,16 @@ import torch
 import torch.nn as nn
 from mpi4py import MPI
 
-from Network import Network
+from Encoder import Encoder
 
 
-def initialize_model(agent_ids, cnn_out_size, lstm_hidden_size, action_shape, atten_size, device, method="DQN"):
-    main_model = {}
+def initialize_model(agent_ids, cnn_out_size, lstm_hidden_size, action_shape, atten_size, device, Model):
+    models = {}
     for idx in range(len(agent_ids)):
-        main_model[agent_ids[idx]] = Network(cnn_out_size=cnn_out_size[idx],
+        models[agent_ids[idx]] = Model(cnn_out_size=cnn_out_size[idx],
                                              lstm_hidden_size=lstm_hidden_size[idx],
-                                             atten_size=atten_size[idx], action_space_shape=tuple(action_shape[idx]),
-                                             method=method).to(device)
-    return main_model
+                                             atten_size=atten_size[idx], action_shape=tuple(action_shape[idx])).to(device)
+    return models
 
 
 def wrap_model_with_dataparallel(models, device_idx):
@@ -48,6 +47,55 @@ def find_name_of_agents(agent_id_to_behaviour_name, agent_ids):
             agent_id_to_name[id] = "Seeker " + str(seeker_idx)
             seeker_idx += 1
     return agent_id_to_name
+
+
+def preprocess_data_from_batch(batch):
+    current_visual_obs = []
+    current_vector_obs = []
+    act = []
+    rewards = []
+    next_visual_obs = []
+    next_vector_obs = []
+    for b in batch:
+        cvis, cves, ac, rw, nvis, nves = [], [], [], [], [], []
+        for element in b:
+            cvis.append(element[0][0])
+            cves.append(element[0][1])
+            ac.append(element[1])
+            rw.append(element[2])
+            nvis.append(element[3][0])
+            nves.append(element[3][1])
+        current_visual_obs.append(cvis)
+        current_vector_obs.append(cves)
+        act.append(ac)
+        rewards.append(rw)
+        next_visual_obs.append(nvis)
+        next_vector_obs.append(nves)
+    return act, current_vector_obs, current_visual_obs, next_vector_obs, next_visual_obs, rewards
+
+
+def extract_input_per_episode(act, batch_idx, current_vector_obs, current_visual_obs, next_vector_obs,
+                              next_visual_obs,
+                              rewards, device):
+    current_visual_obs_per_episode = np.array(current_visual_obs[batch_idx])
+    current_vector_obs_per_episode = np.array(current_vector_obs[batch_idx])
+    act_per_episode = np.array(act[batch_idx])
+    rewards_per_episode = np.array(rewards[batch_idx])
+    next_visual_obs_per_episode = np.array(next_visual_obs[batch_idx])
+    next_vector_obs_per_episode = np.array(next_vector_obs[batch_idx])
+    current_visual_obs_per_episode = torch.from_numpy(current_visual_obs_per_episode).float().to(
+        device).unsqueeze(0)
+    next_visual_obs_per_episode = torch.from_numpy(next_visual_obs_per_episode).float().to(
+        device).unsqueeze(0)
+    act_per_episode = torch.from_numpy(act_per_episode).long().to(device).unsqueeze(0)
+    rewards_per_episode = torch.from_numpy(rewards_per_episode).float().to(device)
+    visual_obs_per_episode = torch.concat((current_visual_obs_per_episode, next_visual_obs_per_episode[:, -1:]), 1)
+    done_mask = torch.zeros(len(visual_obs_per_episode),requires_grad=False)
+    for t in range(0, len(visual_obs_per_episode) - 1):
+        if next_vector_obs_per_episode[t][0] == 0:
+            done_mask[t + 1:] = 1
+            break
+    return act_per_episode, current_visual_obs_per_episode, current_vector_obs_per_episode, rewards_per_episode, visual_obs_per_episode, next_vector_obs_per_episode, done_mask
 
 
 # dqn_out(bsize, act_shape[0]...)
@@ -163,14 +211,21 @@ def _set_flat_grads(network, flat_params):
 def calculate_loss_from_all_loss_stats(loss_stats, agent_ids):
     combined_loss_stats = {}
     for id in agent_ids:
-        combined_loss_stats[id] = []
+        combined_loss_stats[id] = {}
     for loss_stat in loss_stats:
         for id in agent_ids:
-            combined_loss_stats[id] += loss_stat[id]
+            for key in loss_stat[id]:
+                try:
+                    combined_loss_stats[id][key].append(loss_stat[id][key])
+                except:
+                    combined_loss_stats[id][key]=[]
+                    combined_loss_stats[id][key].append(loss_stat[id][key])
     loss = {}
     for id in agent_ids:
-        if len(combined_loss_stats[id]) > 0:
-            loss[id] = np.mean(combined_loss_stats[id])
-        else:
-            loss[id] = 0
+        loss[id]={}
+        for key in combined_loss_stats[id]:
+            if len(combined_loss_stats[id][key]) > 0:
+                loss[id][key] = np.mean(combined_loss_stats[id][key])
+            else:
+                loss[id][key] = 0
     return loss

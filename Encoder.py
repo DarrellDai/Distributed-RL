@@ -1,28 +1,21 @@
 import numpy as np
 import torch.nn as nn
 from torchvision.models import resnet18
-
-from BCNet import BCNet
-from DQN import DQN
 from LSTM_attention import LSTM
 
 
-class Network(nn.Module):
+
+class Encoder(nn.Module):
     '''
     action_shape(tuple): action shape for an agent
     '''
 
-    def __init__(self, cnn_out_size, action_space_shape, lstm_hidden_size, atten_size, method="DQN"):
-        super(Network, self).__init__()
-        self.action_shape = action_space_shape
+    def __init__(self, cnn_out_size, action_shape, lstm_hidden_size, atten_size):
+        super(Encoder, self).__init__()
+        self.action_shape = action_shape
         self.cnn_out_size = cnn_out_size
         self.resnet = resnet18(num_classes=cnn_out_size)
         self.lstm = LSTM(cnn_out_size, lstm_hidden_size, atten_size)
-        self.method = method
-        if self.method == "DQN":
-            self.fc = DQN(lstm_hidden_size, np.prod(np.array(self.action_shape)))
-        elif self.method == "BC":
-            self.fc = BCNet(lstm_hidden_size, np.prod(np.array(self.action_shape)))
 
     '''
     Input:
@@ -57,10 +50,17 @@ class Network(nn.Module):
         resnet_out = self.resnet(obs)
         resnet_out = resnet_out.view(bsize, int(obs.shape[0] / bsize), -1)
         lstm_out, (hidden_state, cell_state) = self.lstm(resnet_out, hidden_state, cell_state)
-        # todo: original code here mignt not cosider the atten_size in dqn_out
-        network_out = self.fc(lstm_out[:, -1, :])
-        network_out = network_out.view((bsize,) + self.action_shape)
-        return lstm_out, (hidden_state, cell_state), network_out
+        return lstm_out, (hidden_state, cell_state)
+        # # todo: original code here mignt not cosider the atten_size in dqn_out
+        # if self.method == "DQN" or self.method == "BC":
+        #     network_out = self.fc(lstm_out[:, -1, :])
+        #     network_out = network_out.view((bsize,) + self.action_shape)
+        #     return lstm_out, (hidden_state, cell_state), network_out
+        # elif self.method == "PPO":
+        #     act_prob = self.fc[0](lstm_out[:, -1, :])
+        #     act_prob = act_prob.view((bsize,) + self.action_shape)
+        #     value = self.fc[1](lstm_out[:, -1, :])
+        #     return lstm_out, (hidden_state, cell_state), (act_prob, value)
 
     def generate_action_matrix(self):
         action_matrix = np.zeros(self.action_shape)
