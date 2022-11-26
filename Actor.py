@@ -53,14 +53,14 @@ class Actor:
         return env
 
     def initialize_model(self, cnn_out_size, lstm_hidden_size, action_shape, atten_size, mode,
-                         checkpoint_to_load=None, method="DQN"):
+                         method, checkpoint_to_load=None):
         self.action_shape = {}
         self.atten_size = {}
         for idx in range(len(self.agent_ids)):
             self.action_shape[self.agent_ids[idx]] = tuple(action_shape[idx])
             self.atten_size[self.agent_ids[idx]] = atten_size[idx]
 
-        self.model = initialize_model(self.agent_ids, cnn_out_size, lstm_hidden_size, action_shape,
+        self.models= initialize_model(self.agent_ids, cnn_out_size, lstm_hidden_size, action_shape,
                                       atten_size, self.device, method)
         if mode == "train":
             self._pull_params()
@@ -68,7 +68,7 @@ class Actor:
             model_state_dicts, optimizer_state_dicts, episode_count, self.epsilon, self.initial_epoch_count, success_count = load_checkpoint(
                 checkpoint_to_load + ".pth.tar", self.device)
             for id in self.agent_ids:
-                self.model[id].load_state_dict(model_state_dicts[id])
+                self.models[id].load_model_state_dict(model_state_dicts[id])
 
     def find_random_action(self, env):
         act = {}
@@ -82,7 +82,7 @@ class Actor:
         for id in self.agent_ids:
             prev_obs[id][0] = prev_obs[id][0].reshape(1, 1, prev_obs[id][0].shape[0], prev_obs[id][0].shape[1],
                                                       prev_obs[id][0].shape[2])
-            _, (hidden_state[id], cell_state[id]), network_out = self.model[id](prev_obs[id][0],
+            _, (hidden_state[id], cell_state[id]), network_out = self.modesl[id].evaluate(prev_obs[id][0],
                                                                             hidden_state=
                                                                             hidden_state[id],
                                                                             cell_state=
@@ -205,8 +205,7 @@ class Actor:
             with threading.Lock():
                 params = self._connect.get("params")
                 for id in self.agent_ids:
-                    self.model[id].load_state_dict(cPickle.loads(params)[id])
-                    self.model[id].to(self.device)
+                    self.models[id].load_model.state_dict(cPickle.loads(params)[id])
 
     def run(self, seed, env, env_path, actor_idx, max_steps, name_tensorboard, mode):
         random.seed(seed)
@@ -237,11 +236,12 @@ if __name__ == "__main__":
         device_idx=args.device, memsize=run_param["memory_size"], hostname=args.redisserver,
         instance_idx=args.instance_idx)
     env = actor.initialize_env(run_param["env_path"], 0)
+    from Behavior_Cloning import Behavior_Cloning
     actor.initialize_model(cnn_out_size=model_param["cnn_out_size"], lstm_hidden_size=model_param["lstm_hidden_size"],
                            action_shape=model_param["action_shape"],
                            atten_size=model_param["atten_size"],
                            mode=args.mode, checkpoint_to_load=run_param["checkpoint_to_load"],
-                           method=model_param["method"])
+                           method=Behavior_Cloning)
     threads = []
     for i in range(args.num_actors):
         if i == 0:

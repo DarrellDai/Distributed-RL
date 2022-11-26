@@ -106,8 +106,8 @@ class Learner:
             self.epsilon = MPI.COMM_WORLD.bcast(self.epsilon)
             self.initial_epoch_count = MPI.COMM_WORLD.bcast(self.initial_epoch_count)
             for id in self.agent_ids:
-                self.models[id].load_model_and_optimizer_state_dict(
-                    MPI.COMM_WORLD.bcast(model_state_dicts[id]), MPI.COMM_WORLD.bcast(optimizer_state_dicts[id]))
+                self.models[id].load_model_state_dict(MPI.COMM_WORLD.bcast(model_state_dicts[id]))
+                self.models[id].load_optimizer_state_dict(MPI.COMM_WORLD.bcast(optimizer_state_dicts[id]))
 
         else:
             if MPI.COMM_WORLD.Get_rank() == 0:

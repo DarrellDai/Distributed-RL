@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 
 from Encoder import Encoder
-from utils import preprocess_data_from_batch, extract_input_per_episode
+from utils import preprocess_data_from_batch, extract_input_per_episode, sync_grads
 
 
 class BCNet(nn.Module):
@@ -35,7 +35,8 @@ class Behavior_Cloning(nn.Module):
         act_prob = self.bc(lstm_out[:, -1, :])
         act_prob = act_prob.view((bsize,) + self.action_shape)
         return lstm_out, (hidden_state, cell_state), act_prob
-
+    def evaluate(self, obs):
+        return self(obs)
     def initialize_training(self, initial_learning_rate, learning_rate_step_size, learning_rate_gamma):
         self.optimizer = torch.optim.Adam(self.parameters(), lr=initial_learning_rate)
         self.scheduler = torch.optim.lr_scheduler.StepLR(self.optimizer, step_size=learning_rate_step_size,
@@ -82,8 +83,9 @@ class Behavior_Cloning(nn.Module):
             # backward
             loss.backward()
 
-            # # Synchronize gradients from all learners
-            # sync_grads(self.main_model[id])
+            # Synchronize gradients from all learners
+            sync_grads(self)
+
             # update params
             self.optimizer.step()
 
@@ -103,6 +105,8 @@ class Behavior_Cloning(nn.Module):
         optimizer_state_dict["BC"] = self.optimizer.state_dict()
         return optimizer_state_dict
 
-    def load_model_and_optimizer_state_dict(self, model_state_dict, optimizer_state_dict):
+    def load_model_state_dict(self, model_state_dict):
         self.load_state_dict(model_state_dict["BC"])
+
+    def load_optimizer_state_dict(self, optimizer_state_dict):
         self.optimizer.load_state_dict(optimizer_state_dict["BC"])
