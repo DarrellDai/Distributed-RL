@@ -12,7 +12,7 @@ from tqdm import tqdm
 
 from Experience_Replay import Distributed_Memory
 from utils import initialize_model, save_checkpoint, load_checkpoint, wait_until_present, \
-    calculate_loss_from_all_loss_stats
+    wait_until_false, calculate_loss_from_all_loss_stats
 
 
 class Learner:
@@ -118,14 +118,14 @@ class Learner:
             self.initial_epoch_count = 0
 
     def train(self, batch_size, sequence_length, num_iter_per_batch, gamma, lambd, clip_rate, final_epsilon, epsilon_vanish_rate, initial_learning_rate,
-              learning_rate_gamma, learning_rate_step_size, name_tensorboard,
+              learning_rate_gamma, learning_rate_step_size, mode, name_tensorboard,
               total_epochs, num_batch_per_learner, actor_update_freq,
               performance_display_interval, checkpoint_save_interval, checkpoint_to_save):
         if MPI.COMM_WORLD.Get_rank() == 0:
             writer = SummaryWriter(os.path.join("runs", str(self.instance_idx) + "_" + name_tensorboard +
                                                 "_" + str(batch_size) + "_" + str(num_batch_per_learner) + "_" + str(
                 initial_learning_rate) + "_" + str(learning_rate_gamma) + "_" + str(learning_rate_step_size)))
-            self._wait_memory()
+
             counter = tqdm(range(self.initial_epoch_count, total_epochs))
         else:
             counter = range(self.initial_epoch_count, total_epochs)
@@ -136,10 +136,12 @@ class Learner:
             for id in self.agent_ids:
                 loss_stats[id] = {}
             if MPI.COMM_WORLD.Get_rank() == 0:
+                self._wait_memory()
                 batches = self._memory.get_batch(bsize=batch_size, num_learner=MPI.COMM_WORLD.Get_size(),
                                                  num_batch=num_batch_per_learner,
                                                  sequence_length=sequence_length)
             batches_per_learner = MPI.COMM_WORLD.scatter(batches)
+
             for id in self.agent_ids:
                 loss_stat = self.models[id].learn(batches_per_learner[id], epoch, num_iter_per_batch, gamma, lambd, clip_rate)
                 for key in loss_stat:
@@ -180,6 +182,10 @@ class Learner:
                     with self._connect.lock("Update params"):
                         self._connect.set("params", cPickle.dumps(self.get_model_state_dicts()))
                         self._connect.set("to_update", cPickle.dumps(True))
+                    if mode=="on_policy":
+                        wait_until_false(self._connect, "to_update")
+                        self._memory.clear_memory()
+
                 if self.epsilon > final_epsilon:
                     self.epsilon *= epsilon_vanish_rate
 
@@ -232,6 +238,7 @@ if __name__ == "__main__":
                   initial_learning_rate=run_param["initial_learning_rate"],
                   learning_rate_gamma=run_param["learning_rate_gamma"],
                   learning_rate_step_size=run_param["learning_rate_step_size"],
+                  mode=run_param["mode"],
                   total_epochs=run_param["total_epochs"], num_batch_per_learner=run_param["num_batch_per_learner"],
                   actor_update_freq=run_param["actor_update_freq(epochs)"],
                   performance_display_interval=run_param["performance_display_interval(epochs)"],

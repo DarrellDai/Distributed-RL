@@ -1,5 +1,6 @@
 import os
 import pickle
+import _pickle as cPickle
 import re
 import time
 
@@ -175,6 +176,14 @@ def wait_until_present(server, name):
     # print("Waiting for "+name)
     while True:
         if not server.get(name) is None:
+            # print(name+" received")
+            break
+        time.sleep(0.1)
+
+def wait_until_false(server, name):
+    # print("Waiting for "+name)
+    while True:
+        if not cPickle.loads(server.get(name)):
             # print(name+" received")
             break
         time.sleep(0.1)

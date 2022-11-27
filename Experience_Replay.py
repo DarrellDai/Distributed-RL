@@ -13,7 +13,7 @@ class Memory():
         self.memsize = memsize
         self.replay_buffer = {}
         self.agent_ids = agent_ids
-        for id in agent_ids:
+        for id in self.agent_ids:
             self.replay_buffer[id] = deque(maxlen=self.memsize)
 
     def add_episode(self, episodes):
@@ -94,6 +94,10 @@ class Memory():
     def __len__(self):
         return len(self.replay_buffer[self.agent_ids[0]])
 
+    def clear_memory(self):
+        for id in self.agent_ids:
+            self.replay_buffer[id].clear()
+
 
 class Distributed_Memory(threading.Thread):
 
@@ -128,3 +132,6 @@ class Distributed_Memory(threading.Thread):
 
     def __len__(self):
         return len(self._memory)
+
+    def clear_memory(self):
+        self._memory.clear_memory()

@@ -60,8 +60,8 @@ class Actor:
             self.action_shape[self.agent_ids[idx]] = tuple(action_shape[idx])
             self.atten_size[self.agent_ids[idx]] = atten_size[idx]
 
-        self.models= initialize_model(self.agent_ids, cnn_out_size, lstm_hidden_size, action_shape,
-                                      atten_size, self.device, method)
+        self.models = initialize_model(self.agent_ids, cnn_out_size, lstm_hidden_size, action_shape,
+                                       atten_size, self.device, method)
         if mode == "train":
             self._pull_params()
         else:
@@ -83,10 +83,10 @@ class Actor:
             prev_obs[id][0] = prev_obs[id][0].reshape(1, 1, prev_obs[id][0].shape[0], prev_obs[id][0].shape[1],
                                                       prev_obs[id][0].shape[2])
             _, (hidden_state[id], cell_state[id]), (act_prob, value) = self.models[id].evaluate(prev_obs[id][0],
-                                                                            hidden_state=
-                                                                            hidden_state[id],
-                                                                            cell_state=
-                                                                            cell_state[id])
+                                                                                                hidden_state=
+                                                                                                hidden_state[id],
+                                                                                                cell_state=
+                                                                                                cell_state[id])
 
             act[id] = find_optimal_action(act_prob)
             act[id] = torch.from_numpy(act[id]).to(self.device)
@@ -134,12 +134,11 @@ class Actor:
                     prev_obs[id][0] = torch.from_numpy(prev_obs[id][0]).float().to(self.device)
                 step_count += 1
                 with torch.no_grad():
-                    with threading.Lock():
-                        act, hidden_state, cell_state = self.find_best_action_by_model(prev_obs,
-                                                                                       hidden_state,
-                                                                                       cell_state)
-                        if np.random.rand(1) < epsilon:
-                            act = self.find_random_action(env)
+                    act, hidden_state, cell_state = self.find_best_action_by_model(prev_obs,
+                                                                                   hidden_state,
+                                                                                   cell_state)
+                    if np.random.rand(1) < epsilon:
+                        act = self.find_random_action(env)
                     obs_dict, reward_dict, done_dict, info_dict = env.step(act)
 
                     done = done_dict["__all__"]
@@ -170,8 +169,7 @@ class Actor:
                     # print("Sending memory")
                     with self._connect.lock("Update Experience"):
                         self._connect.rpush("experience", cPickle.dumps(memory))
-                    for id in self.agent_ids:
-                        memory.replay_buffer[id].clear()
+                    memory.clear_memory()
 
                 with self._connect.lock("Update"):
                     wait_until_present(self._connect, "episode_count")
@@ -200,10 +198,9 @@ class Actor:
         wait_until_present(self._connect, "params")
         # print("Sync params.")
         with self._connect.lock("Update params"):
-            with threading.Lock():
-                params = self._connect.get("params")
-                for id in self.agent_ids:
-                    self.models[id].load_model_state_dict(cPickle.loads(params)[id])
+            params = self._connect.get("params")
+            for id in self.agent_ids:
+                self.models[id].load_model_state_dict(cPickle.loads(params)[id])
 
     def run(self, seed, env, env_path, actor_idx, max_steps, name_tensorboard, mode):
         random.seed(seed)
@@ -235,6 +232,7 @@ if __name__ == "__main__":
         instance_idx=args.instance_idx)
     env = actor.initialize_env(run_param["env_path"], 0)
     from PPO import PPO
+
     actor.initialize_model(cnn_out_size=model_param["cnn_out_size"], lstm_hidden_size=model_param["lstm_hidden_size"],
                            action_shape=model_param["action_shape"],
                            atten_size=model_param["atten_size"],
