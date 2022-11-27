@@ -49,7 +49,7 @@ class Learner:
         last_length = -1
         while True:
             if len(self._memory) != last_length:
-                print("Waiting for memory: {}/{}".format(len(self._memory), self._memory.memsize))
+                print("\n Waiting for memory: {}/{}".format(len(self._memory), self._memory.memsize))
             if len(self._memory) == self._memory.memsize:
                 # print("Memory got!")
                 break
@@ -116,7 +116,8 @@ class Learner:
                 self._connect.set("params", cPickle.dumps(self.get_model_state_dicts()))
             self.initial_epoch_count = 0
 
-    def train(self, batch_size, sequence_length, num_iter_per_batch, gamma, lambd, clip_rate, final_epsilon, epsilon_vanish_rate, initial_learning_rate,
+    def train(self, batch_size, sequence_length, num_iter_per_batch, gamma, lambd, clip_rate, final_epsilon,
+              epsilon_vanish_rate, initial_learning_rate,
               learning_rate_gamma, learning_rate_step_size, mode, name_tensorboard,
               total_epochs, num_batch_per_learner, actor_update_freq,
               performance_display_interval, checkpoint_save_interval, checkpoint_to_save):
@@ -142,7 +143,8 @@ class Learner:
             batches_per_learner = MPI.COMM_WORLD.scatter(batches)
 
             for id in self.agent_ids:
-                loss_stat = self.models[id].learn(batches_per_learner[id], epoch, num_iter_per_batch, gamma, lambd, clip_rate)
+                loss_stat = self.models[id].learn(batches_per_learner[id], epoch, num_iter_per_batch, gamma, lambd,
+                                                  clip_rate)
                 for key in loss_stat:
                     loss_stats[id][key] = loss_stat[key]
 
@@ -181,7 +183,7 @@ class Learner:
                     with self._connect.lock("Update params"):
                         self._connect.set("params", cPickle.dumps(self.get_model_state_dicts()))
                         self._connect.set("to_update", cPickle.dumps(True))
-                    if mode=="on_policy":
+                    if mode == "on_policy":
                         wait_until_false(self._connect, "to_update")
                         self._memory.clear_memory()
 
@@ -222,6 +224,7 @@ if __name__ == "__main__":
     learner = Learner(memsize=run_param["memory_size"], epsilon=run_param["initial_epsilon"],
                       hostname=args.redisserver, device_idx=run_param["device_idx"], instance_idx=args.instance_idx)
     from PPO import PPO
+
     learner.initialize_model(cnn_out_size=model_param["cnn_out_size"], lstm_hidden_size=model_param["lstm_hidden_size"],
                              action_shape=model_param["action_shape"],
                              atten_size=model_param["atten_size"], method=PPO)
@@ -230,7 +233,9 @@ if __name__ == "__main__":
                                 learning_rate_step_size=run_param["learning_rate_step_size"],
                                 resume=run_param["resume"],
                                 checkpoint_to_load=run_param["checkpoint_to_load"])
-    learner.train(batch_size=run_param["batch_size"], sequence_length=run_param["sequence_length"], num_iter_per_batch=run_param["num_iter_per_batch"], gamma=run_param["RL_gamma"], lambd=run_param["lambd"], clip_rate=run_param["clip_rate"],
+    learner.train(batch_size=run_param["batch_size"], sequence_length=run_param["sequence_length"],
+                  num_iter_per_batch=run_param["num_iter_per_batch"], gamma=run_param["RL_gamma"],
+                  lambd=run_param["lambd"], clip_rate=run_param["clip_rate"],
                   name_tensorboard=run_param["name_tensorboard"],
                   final_epsilon=run_param["final_epsilon"],
                   epsilon_vanish_rate=run_param["epsilon_vanish_rate"],
