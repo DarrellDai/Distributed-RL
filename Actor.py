@@ -110,7 +110,6 @@ class Actor:
         local_memory = {}
         hidden_state = {}
         cell_state = {}
-        lstm_out = {}
         alive = {}
         if mode == "train":
             wait_until_present(self._connect, "epsilon")
