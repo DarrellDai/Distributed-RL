@@ -10,7 +10,6 @@ from mpi4py import MPI
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
-from Behavior_Cloning import Behavior_Cloning
 from Experience_Replay import Distributed_Memory
 from utils import initialize_model, save_checkpoint, load_checkpoint, wait_until_present, \
     calculate_loss_from_all_loss_stats
@@ -118,7 +117,7 @@ class Learner:
                 self._connect.set("params", cPickle.dumps(self.get_model_state_dicts()))
             self.initial_epoch_count = 0
 
-    def train(self, batch_size, sequence_length, final_epsilon, epsilon_vanish_rate, initial_learning_rate,
+    def train(self, batch_size, sequence_length, num_iter_per_batch, gamma, lambd, clip_rate, final_epsilon, epsilon_vanish_rate, initial_learning_rate,
               learning_rate_gamma, learning_rate_step_size, name_tensorboard,
               total_epochs, num_batch_per_learner, actor_update_freq,
               performance_display_interval, checkpoint_save_interval, checkpoint_to_save):
@@ -142,7 +141,7 @@ class Learner:
                                                  sequence_length=sequence_length)
             batches_per_learner = MPI.COMM_WORLD.scatter(batches)
             for id in self.agent_ids:
-                loss_stat = self.models[id].learn(batches_per_learner[id], epoch)
+                loss_stat = self.models[id].learn(batches_per_learner[id], epoch, num_iter_per_batch, gamma, lambd, clip_rate)
                 for key in loss_stat:
                     loss_stats[id][key] = loss_stat[key]
 
@@ -217,15 +216,16 @@ if __name__ == "__main__":
         run_param = yaml.safe_load(file)
     learner = Learner(memsize=run_param["memory_size"], epsilon=run_param["initial_epsilon"],
                       hostname=args.redisserver, device_idx=run_param["device_idx"], instance_idx=args.instance_idx)
+    from PPO import PPO
     learner.initialize_model(cnn_out_size=model_param["cnn_out_size"], lstm_hidden_size=model_param["lstm_hidden_size"],
                              action_shape=model_param["action_shape"],
-                             atten_size=model_param["atten_size"], method=Behavior_Cloning)
+                             atten_size=model_param["atten_size"], method=PPO)
     learner.initialize_training(initial_learning_rate=run_param["initial_learning_rate"],
                                 learning_rate_gamma=run_param["learning_rate_gamma"],
                                 learning_rate_step_size=run_param["learning_rate_step_size"],
                                 resume=run_param["resume"],
                                 checkpoint_to_load=run_param["checkpoint_to_load"])
-    learner.train(batch_size=run_param["batch_size"], sequence_length=run_param["sequence_length"],
+    learner.train(batch_size=run_param["batch_size"], sequence_length=run_param["sequence_length"], num_iter_per_batch=run_param["num_iter_per_batch"], gamma=run_param["RL_gamma"], lambd=run_param["lambd"], clip_rate=run_param["clip_rate"],
                   name_tensorboard=run_param["name_tensorboard"],
                   final_epsilon=run_param["final_epsilon"],
                   epsilon_vanish_rate=run_param["epsilon_vanish_rate"],

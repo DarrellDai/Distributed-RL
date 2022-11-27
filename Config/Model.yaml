@@ -3,4 +3,4 @@ atten_size: [5]
 lstm_hidden_size: [512]
 action_shape: [[3,3]]
 action_out_size: [32]
-method: "BC"
+method: "PPO"

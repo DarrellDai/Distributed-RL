@@ -82,13 +82,13 @@ class Actor:
         for id in self.agent_ids:
             prev_obs[id][0] = prev_obs[id][0].reshape(1, 1, prev_obs[id][0].shape[0], prev_obs[id][0].shape[1],
                                                       prev_obs[id][0].shape[2])
-            _, (hidden_state[id], cell_state[id]), network_out = self.models[id].evaluate(prev_obs[id][0],
+            _, (hidden_state[id], cell_state[id]), (act_prob, value) = self.models[id].evaluate(prev_obs[id][0],
                                                                             hidden_state=
                                                                             hidden_state[id],
                                                                             cell_state=
                                                                             cell_state[id])
 
-            act[id] = find_optimal_action(network_out)
+            act[id] = find_optimal_action(act_prob)
             act[id] = torch.from_numpy(act[id]).to(self.device)
             # todo:might be problems here
             # hidden_state[id], cell_state[id], lo_new = find_hidden_cell_out_of_an_action(act[id],
@@ -203,7 +203,7 @@ class Actor:
             with threading.Lock():
                 params = self._connect.get("params")
                 for id in self.agent_ids:
-                    self.models[id].load_model.state_dict(cPickle.loads(params)[id])
+                    self.models[id].load_model_state_dict(cPickle.loads(params)[id])
 
     def run(self, seed, env, env_path, actor_idx, max_steps, name_tensorboard, mode):
         random.seed(seed)
@@ -234,12 +234,12 @@ if __name__ == "__main__":
         device_idx=args.device, memsize=run_param["memory_size"], hostname=args.redisserver,
         instance_idx=args.instance_idx)
     env = actor.initialize_env(run_param["env_path"], 0)
-    from Behavior_Cloning import Behavior_Cloning
+    from PPO import PPO
     actor.initialize_model(cnn_out_size=model_param["cnn_out_size"], lstm_hidden_size=model_param["lstm_hidden_size"],
                            action_shape=model_param["action_shape"],
                            atten_size=model_param["atten_size"],
                            mode=args.mode, checkpoint_to_load=run_param["checkpoint_to_load"],
-                           method=Behavior_Cloning)
+                           method=PPO)
     threads = []
     for i in range(args.num_actors):
         if i == 0:

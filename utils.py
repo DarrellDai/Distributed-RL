@@ -90,7 +90,7 @@ def extract_input_per_episode(act, batch_idx, current_vector_obs, current_visual
     act_per_episode = torch.from_numpy(act_per_episode).long().to(device).unsqueeze(0)
     rewards_per_episode = torch.from_numpy(rewards_per_episode).float().to(device)
     visual_obs_per_episode = torch.concat((current_visual_obs_per_episode, next_visual_obs_per_episode[:, -1:]), 1)
-    done_mask = torch.zeros(len(visual_obs_per_episode),requires_grad=False)
+    done_mask = torch.zeros(visual_obs_per_episode.shape[1],requires_grad=False).to(device)
     for t in range(0, len(visual_obs_per_episode) - 1):
         if next_vector_obs_per_episode[t][0] == 0:
             done_mask[t + 1:] = 1
@@ -99,8 +99,8 @@ def extract_input_per_episode(act, batch_idx, current_vector_obs, current_visual
 
 
 # dqn_out(bsize, act_shape[0]...)
-def find_optimal_action(dqn_out):
-    dqn_out_clone = torch.clone(dqn_out)
+def find_optimal_action(action_score):
+    dqn_out_clone = torch.clone(action_score)
     dqn_out_clone = np.array(dqn_out_clone.detach().cpu())
     act = np.zeros((dqn_out_clone.shape[0], 1, len(dqn_out_clone.shape) - 1))
     for batch in range(len(dqn_out_clone)):
