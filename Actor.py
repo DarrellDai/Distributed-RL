@@ -40,7 +40,15 @@ class Actor:
             self.device = torch.device('cuda:' + str(device_idx))
         self.instance_idx = instance_idx
         self._connect = redis.Redis(host=hostname, db=instance_idx)
+        while True:
+            idx = 0
+            if not self._connect.get("actor{}".format(idx)) is None:
+                self._connect.delete("actor{}".format(idx))
+                idx+=1
+            else:
+                break
         self.locks = []
+
         for i in range(num_actor):
             self.locks.append(self._connect.lock("actor{}".format(i)))
         torch.set_num_threads(10)
