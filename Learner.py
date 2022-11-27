@@ -36,7 +36,6 @@ class Learner:
             self._connect.delete("to_update")
             self._connect.delete("Update params")
             self._connect.delete("Update Experience")
-
         if device_idx == -1:
             self.device = torch.device('cpu')
         else:

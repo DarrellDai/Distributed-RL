@@ -40,6 +40,9 @@ class Actor:
             self.device = torch.device('cuda:' + str(device_idx))
         self.instance_idx = instance_idx
         self._connect = redis.Redis(host=hostname, db=instance_idx)
+        self.locks = []
+        for i in range(num_actor):
+            self.locks.append(self._connect.lock("actor{}".format(i)))
         torch.set_num_threads(10)
 
     def initialize_env(self, env_path, actor_idx):
@@ -134,9 +137,10 @@ class Actor:
                     prev_obs[id][0] = torch.from_numpy(prev_obs[id][0]).float().to(self.device)
                 step_count += 1
                 with torch.no_grad():
-                    act, hidden_state, cell_state = self.find_best_action_by_model(prev_obs,
-                                                                                   hidden_state,
-                                                                                   cell_state)
+                    with self._connect.lock("actor{}".format(actor_idx)):
+                        act, hidden_state, cell_state = self.find_best_action_by_model(prev_obs,
+                                                                                       hidden_state,
+                                                                                       cell_state)
                     if np.random.rand(1) < epsilon:
                         act = self.find_random_action(env)
                     obs_dict, reward_dict, done_dict, info_dict = env.step(act)
@@ -191,16 +195,20 @@ class Actor:
                     writer.flush()
 
                 if to_update and actor_idx == 0:
-                    self._pull_params()
-                    self._connect.set("to_update", cPickle.dumps(False))
+                    with self._connect.lock("Update params"):
+                        self._pull_params()
+                        self._connect.set("to_update", cPickle.dumps(False))
 
     def _pull_params(self):
         wait_until_present(self._connect, "params")
         # print("Sync params.")
-        with self._connect.lock("Update params"):
-            params = self._connect.get("params")
-            for id in self.agent_ids:
-                self.models[id].load_model_state_dict(cPickle.loads(params)[id])
+        for lock in self.locks:
+            lock.acquire()
+        params = self._connect.get("params")
+        for id in self.agent_ids:
+            self.models[id].load_model_state_dict(cPickle.loads(params)[id])
+        for lock in self.locks:
+            lock.release()
 
     def run(self, seed, env, env_path, actor_idx, max_steps, name_tensorboard, mode):
         random.seed(seed)
