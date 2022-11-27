@@ -148,7 +148,7 @@ class PPO(nn.Module):
                 critic_loss.backward()
                 # Synchronize gradients from all learners
                 sync_grads(self)
-                # torch.nn.utils.clip_grad_norm_(self.actor.parameters(), 40)
+                torch.nn.utils.clip_grad_norm_(self.actor.parameters(), 40)
                 self.actor_optimizer.step()
                 self.critic_optimizer.step()
                 loss_stat["actor_loss"] = actor_loss.detach().cpu()
