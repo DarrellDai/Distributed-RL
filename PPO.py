@@ -137,10 +137,9 @@ class PPO(nn.Module):
                 actor_losses = torch.stack(actor_losses)
                 actor_loss = actor_losses.mean()
 
-                pred_values = torch.stack(pred_values)
-                if i == 0:
-                    target_values = torch.stack(target_values).to(next(self.parameters()).device)
-                critic_loss = self.critic_criterion(pred_values, target_values)
+                critic_loss = 0
+                for pred_value, target_value in zip(pred_values, target_values):
+                    critic_loss = critic_loss + self.critic_criterion(pred_value, target_value)
 
                 self.actor_optimizer.zero_grad()
                 self.critic_optimizer.zero_grad()
