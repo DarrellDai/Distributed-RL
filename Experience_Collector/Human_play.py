@@ -1,5 +1,6 @@
 import os
 import sys
+
 current = os.path.dirname(os.path.realpath(__file__))
 os.chdir(current)
 parent = os.path.dirname(current)
@@ -34,7 +35,7 @@ class Human_play:
         self.num_actor = num_actor
         self.device_idx = device_idx
         self.device = torch.device('cuda:' + str(device_idx) if torch.cuda.is_available() else 'cpu')
-        self.instance_idx=instance_idx
+        self.instance_idx = instance_idx
 
     def initialize_env(self, env_path, max_steps, total_episodes, worker_id):
         unity_env = UnityEnvironment(env_path, worker_id=worker_id)
@@ -136,7 +137,15 @@ class Human_play:
     def save_mode(self, checkpoint_to_save, checkpoint_to_load=None):
         if not checkpoint_to_load is None:
             mem, id_to_name, num_win = self.load_checkpoint(checkpoint_to_load)
-            mem, num_win = self.play_game(start_episode=len(mem) - 1, mem=mem, num_win=num_win)
+            new_mem = Memory(memsize=self.total_episodes, agent_ids=mem.agent_ids)
+            for id in self.id_to_name:
+                stored_memory = 0
+                for episode in mem.replay_buffer[id]:
+                    new_mem.replay_buffer[id].append(episode)
+                    stored_memory += 1
+                    if stored_memory == self.total_episodes:
+                        break
+            mem, num_win = self.play_game(start_episode=len(new_mem) - 1, mem=new_mem, num_win=num_win)
         else:
             mem, num_win = self.play_game()
         filename = checkpoint_to_save + "_" + datetime.now().isoformat()[:10] + "_" + datetime.now().isoformat()[
@@ -168,7 +177,7 @@ class Human_play:
             self.connect.set("success_count", cPickle.dumps(0))
 
     def load_checkpoint(self, checkpoint_name):
-        filepath = os.path.join('../Checkpoint', checkpoint_name)
+        filepath = os.path.join('../Checkpoint', checkpoint_name + ".pth.tar")
         checkpoint = torch.load(filepath, self.device)
         memory = checkpoint["memory"]
         id_to_name = checkpoint["id_to_name"]
