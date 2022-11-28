@@ -140,7 +140,7 @@ class PPO(nn.Module):
                 critic_loss = 0
                 for pred_value, target_value in zip(pred_values, target_values):
                     critic_loss = critic_loss + self.critic_criterion(pred_value, target_value)
-
+                critic_loss = critic_loss/len(pred_values)
                 self.actor_optimizer.zero_grad()
                 self.critic_optimizer.zero_grad()
                 actor_loss.backward(retain_graph=True)
