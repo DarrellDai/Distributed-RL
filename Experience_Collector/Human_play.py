@@ -1,6 +1,7 @@
 import os
 import sys
 current = os.path.dirname(os.path.realpath(__file__))
+os.chdir(current)
 parent = os.path.dirname(current)
 sys.path.append(parent)
 import _pickle as cPickle
