@@ -9,15 +9,18 @@ import torch
 import torch.nn as nn
 from mpi4py import MPI
 
-from Encoder import Encoder
 
 
-def initialize_model(agent_ids, cnn_out_size, lstm_hidden_size, action_shape, atten_size, device, Model):
+def initialize_model(agent_ids, nn_param, method_param, device, Model):
     models = {}
+    nn_params=[]
     for idx in range(len(agent_ids)):
-        models[agent_ids[idx]] = Model(cnn_out_size=cnn_out_size[idx],
-                                             lstm_hidden_size=lstm_hidden_size[idx],
-                                             atten_size=atten_size[idx], action_shape=tuple(action_shape[idx])).to(device)
+        nn_param_per_agent = {}
+        for key, value in nn_param.items():
+            nn_param_per_agent[key] = value[idx]
+        nn_params.append(nn_param_per_agent)
+    for idx in range(len(agent_ids)):
+        models[agent_ids[idx]] = Model(nn_params[idx], method_param).to(device)
     return models
 
 

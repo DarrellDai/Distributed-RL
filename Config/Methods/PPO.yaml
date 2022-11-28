@@ -1,0 +1,6 @@
+method: "PPO"
+mode: "on_policy"
+num_iter_per_batch: 4
+RL_gamma: 0.99
+lambd: 0.95
+clip_rate: 0.2

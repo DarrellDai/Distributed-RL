@@ -193,7 +193,7 @@ if __name__ == "__main__":
     parser.add_argument('-ins', '--instance_idx', type=int, default=0, help="The index of instance to run")
     parser.add_argument('-w', '--worker', type=int, default=0, help="Worker id to run the environment")
     args = parser.parse_args()
-    with open("Config/" + args.run_config) as file:
+    with open("Config/Run/" + args.run_config) as file:
         param = yaml.safe_load(file)
     human_play = Human_play(device_idx=param["device_idx"], instance_idx=args.instance_idx)
     if args.mode == 'l':

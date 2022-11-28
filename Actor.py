@@ -5,6 +5,7 @@ import random
 import threading
 from copy import deepcopy
 from itertools import count
+import importlib
 
 import numpy as np
 import redis
@@ -63,16 +64,14 @@ class Actor:
             self._connect.set("id_to_name", cPickle.dumps(self.id_to_name))
         return env
 
-    def initialize_model(self, cnn_out_size, lstm_hidden_size, action_shape, atten_size, mode,
-                         method, checkpoint_to_load=None):
+    def initialize_model(self, nn_param, method_param, method, mode, checkpoint_to_load=None):
         self.action_shape = {}
         self.atten_size = {}
         for idx in range(len(self.agent_ids)):
-            self.action_shape[self.agent_ids[idx]] = tuple(action_shape[idx])
-            self.atten_size[self.agent_ids[idx]] = atten_size[idx]
+            self.action_shape[self.agent_ids[idx]] = tuple(nn_param["action_shape"][idx])
+            self.atten_size[self.agent_ids[idx]] = nn_param["atten_size"][idx]
 
-        self.models = initialize_model(self.agent_ids, cnn_out_size, lstm_hidden_size, action_shape,
-                                       atten_size, self.device, method)
+        self.models = initialize_model(self.agent_ids, nn_param, method_param, self.device, method)
         if mode == "train":
             self._pull_params()
         else:
@@ -233,27 +232,26 @@ if __name__ == "__main__":
     parser.add_argument('-r', '--redisserver', type=str, default='localhost', help="Redis's server name.")
     parser.add_argument('-ins', '--instance_idx', type=int, default=0, help="The index of instance to run")
     parser.add_argument('-d', '--device', type=int, default=0, help="Index of GPU to use, -1 is CPU")
-    parser.add_argument('-m', '--mode', type=str, default="train", help="Train or test mode")
-    parser.add_argument('-mc', '--model_config', type=str, default='Model.yaml', help="Model config file name")
+    parser.add_argument('-m', '--mode', type=str, default="train", help="Run or test mode")
+    parser.add_argument('-nnc', '--nn_config', type=str, default='NN.yaml', help="Neural network config file name")
+    parser.add_argument('-mc', '--method_config', type=str, default='PPO.yaml', help="Method config file name")
     parser.add_argument('-rc', '--run_config', type=str, default='Train.yaml', help="Running config file name")
     args = parser.parse_args()
 
-    with open("Config/" + args.model_config) as file:
-        model_param = yaml.safe_load(file)
-    with open("Config/" + args.run_config) as file:
+    with open("Config/Neural_Network/" + args.nn_config) as file:
+        nn_param = yaml.safe_load(file)
+    with open("Config/Methods/" + args.method_config) as file:
+        method_param = yaml.safe_load(file)
+    with open("Config/Run/" + args.run_config) as file:
         run_param = yaml.safe_load(file)
     actor = Actor(
         num_actor=args.num_actors,
         device_idx=args.device, memsize=run_param["memory_size"], hostname=args.redisserver,
         instance_idx=args.instance_idx)
     env = actor.initialize_env(run_param["env_path"], 0)
-    from PPO import PPO
+    Method = getattr(importlib.import_module(method_param["method"]), method_param["method"])
 
-    actor.initialize_model(cnn_out_size=model_param["cnn_out_size"], lstm_hidden_size=model_param["lstm_hidden_size"],
-                           action_shape=model_param["action_shape"],
-                           atten_size=model_param["atten_size"],
-                           mode=args.mode, checkpoint_to_load=run_param["checkpoint_to_load"],
-                           method=PPO)
+    actor.initialize_model(nn_param=nn_param, method_param=method_param, mode=args.mode, method=Method, checkpoint_to_load=run_param["checkpoint_to_load"])
     threads = []
     for i in range(args.num_actors):
         if i == 0:

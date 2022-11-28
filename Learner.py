@@ -1,5 +1,6 @@
 import _pickle as cPickle
 import argparse
+import importlib
 import os
 import time
 
@@ -57,7 +58,7 @@ class Learner:
             last_length = len(self._memory)
             time.sleep(0.1)
 
-    def initialize_model(self, cnn_out_size, lstm_hidden_size, action_shape, atten_size, method):
+    def initialize_model(self, nn_param, method_param, method):
         self.id_to_name = None
         self.agent_ids = None
         if MPI.COMM_WORLD.Get_rank() == 0:
@@ -69,8 +70,8 @@ class Learner:
             self._memory.start()
         self.id_to_name = MPI.COMM_WORLD.bcast(self.id_to_name)
         self.agent_ids = MPI.COMM_WORLD.bcast(self.agent_ids)
-        self.models = initialize_model(self.agent_ids, cnn_out_size, lstm_hidden_size, action_shape,
-                                       atten_size, self.device, method)
+        self.models = initialize_model(self.agent_ids, nn_param, method_param, self.device, method)
+        self.mode = method_param["mode"]
 
     def get_model_state_dicts(self):
         model_state_dicts = {}
@@ -117,9 +118,9 @@ class Learner:
                 self._connect.set("params", cPickle.dumps(self.get_model_state_dicts()))
             self.initial_epoch_count = 0
 
-    def train(self, batch_size, sequence_length, num_iter_per_batch, gamma, lambd, clip_rate, final_epsilon,
+    def train(self, batch_size, sequence_length, final_epsilon,
               epsilon_vanish_rate, initial_learning_rate,
-              learning_rate_gamma, learning_rate_step_size, mode, name_tensorboard,
+              learning_rate_gamma, learning_rate_step_size, name_tensorboard,
               total_epochs, num_batch_per_learner, actor_update_freq,
               performance_display_interval, checkpoint_save_interval, checkpoint_to_save):
         if MPI.COMM_WORLD.Get_rank() == 0:
@@ -146,8 +147,7 @@ class Learner:
             batches_per_learner = MPI.COMM_WORLD.scatter(batches)
 
             for id in self.agent_ids:
-                loss_stat = self.models[id].learn(batches_per_learner[id], epoch, num_iter_per_batch, gamma, lambd,
-                                                  clip_rate)
+                loss_stat = self.models[id].learn(batches_per_learner[id], epoch)
                 for key in loss_stat:
                     loss_stats[id][key] = loss_stat[key]
 
@@ -179,14 +179,15 @@ class Learner:
                                           success_count / episode_count,
                                           epoch)
                     for loss_name in loss[id]:
-                        writer.add_scalar(self.id_to_name[id] + ": Loss ("+loss_name+") vs Epoch", loss[id][loss_name], epoch)
+                        writer.add_scalar(self.id_to_name[id] + ": Loss (" + loss_name + ") vs Epoch",
+                                          loss[id][loss_name], epoch)
                 writer.flush()
 
                 if epoch % actor_update_freq == 0:
                     with self._connect.lock("Update params"):
                         self._connect.set("params", cPickle.dumps(self.get_model_state_dicts()))
                         self._connect.set("to_update", cPickle.dumps(True))
-                    if mode == "on_policy":
+                    if self.mode == "on_policy":
                         wait_until_false(self._connect, "to_update")
                         self._connect.delete("experience")
                         self._memory.clear_memory()
@@ -218,35 +219,35 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Learner process for distributed reinforcement.')
     parser.add_argument('-r', '--redisserver', type=str, default='localhost', help="Redis's server name.")
     parser.add_argument('-ins', '--instance_idx', type=int, default=0, help="The index of instance to run")
-    parser.add_argument('-mc', '--model_config', type=str, default='Model.yaml', help="Model config file name")
-    parser.add_argument('-rc', '--run_config', type=str, default='Train.yaml', help="Running config file name")
+    parser.add_argument('-nnc', '--nn_config', type=str, default='NN.yaml', help="Neural network config file name")
+    parser.add_argument('-mc', '--method_config', type=str, default='PPO.yaml', help="Method config file name")
+    parser.add_argument('-rc', '--run_config', type=str, default='Run.yaml', help="Running config file name")
     args = parser.parse_args()
-    with open("Config/" + args.model_config) as file:
-        model_param = yaml.safe_load(file)
-    with open("Config/" + args.run_config) as file:
+    with open("Config/Neural_Network/" + args.nn_config) as file:
+        nn_param = yaml.safe_load(file)
+    with open("Config/Methods/" + args.method_config) as file:
+        method_param = yaml.safe_load(file)
+    with open("Config/Run/" + args.run_config) as file:
         run_param = yaml.safe_load(file)
+
+    Method = getattr(importlib.import_module(method_param["method"]), method_param["method"])
     learner = Learner(memsize=run_param["memory_size"], epsilon=run_param["initial_epsilon"],
                       hostname=args.redisserver, device_idx=run_param["device_idx"], instance_idx=args.instance_idx)
-    from PPO import PPO
 
-    learner.initialize_model(cnn_out_size=model_param["cnn_out_size"], lstm_hidden_size=model_param["lstm_hidden_size"],
-                             action_shape=model_param["action_shape"],
-                             atten_size=model_param["atten_size"], method=PPO)
+
+    learner.initialize_model(nn_param=nn_param, method_param=method_param, method=Method)
     learner.initialize_training(initial_learning_rate=run_param["initial_learning_rate"],
                                 learning_rate_gamma=run_param["learning_rate_gamma"],
                                 learning_rate_step_size=run_param["learning_rate_step_size"],
                                 resume=run_param["resume"],
                                 checkpoint_to_load=run_param["checkpoint_to_load"])
     learner.train(batch_size=run_param["batch_size"], sequence_length=run_param["sequence_length"],
-                  num_iter_per_batch=run_param["num_iter_per_batch"], gamma=run_param["RL_gamma"],
-                  lambd=run_param["lambd"], clip_rate=run_param["clip_rate"],
                   name_tensorboard=run_param["name_tensorboard"],
                   final_epsilon=run_param["final_epsilon"],
                   epsilon_vanish_rate=run_param["epsilon_vanish_rate"],
                   initial_learning_rate=run_param["initial_learning_rate"],
                   learning_rate_gamma=run_param["learning_rate_gamma"],
                   learning_rate_step_size=run_param["learning_rate_step_size"],
-                  mode=run_param["mode"],
                   total_epochs=run_param["total_epochs"], num_batch_per_learner=run_param["num_batch_per_learner"],
                   actor_update_freq=run_param["actor_update_freq(epochs)"],
                   performance_display_interval=run_param["performance_display_interval(epochs)"],

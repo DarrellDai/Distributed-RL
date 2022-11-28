@@ -2,8 +2,7 @@ env_path: 'C:/Unity Projects/Hide and Seek/Environments/2.0/Env_Nav_3_Seekers_Bi
 checkpoint_to_load: "0_360_Checkpoint_Nav_Distributed_RL_BC_25_2_5e-05_0.5_125"
 checkpoint_to_save: "Checkpoint_Nav_Distributed_RL_BC"
 name_tensorboard: "CNN_LSTM_DQN_Nav_Distributed_RL_Hider_BC"
-mode: "off_policy"
-memory_size: 25
+memory_size: 1
 device_idx: [0]
 resume: False
 total_epochs: 1200
