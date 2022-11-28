@@ -23,11 +23,12 @@ class BCNet(nn.Module):
 
 
 class Behavior_Cloning(nn.Module):
-    def __init__(self, cnn_out_size, action_shape, lstm_hidden_size, atten_size):
+    def __init__(self, nn_param, method_param):
         super().__init__()
-        self.action_shape = action_shape
-        self.encoder = Encoder(cnn_out_size, action_shape, lstm_hidden_size, atten_size)
-        self.bc = BCNet(lstm_hidden_size, np.prod(np.array(self.action_shape)))
+        self.action_shape = tuple(nn_param["action_shape"])
+        self.encoder = Encoder(nn_param["cnn_out_size"], self.action_shape, nn_param["lstm_hidden_size"],
+                               nn_param["atten_size"])
+        self.bc = BCNet(nn_param["lstm_hidden_size"], np.prod(np.array(self.action_shape)))
 
     def forward(self, obs, hidden_state, cell_state):
         bsize = obs.shape[0]

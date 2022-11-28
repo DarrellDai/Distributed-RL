@@ -37,12 +37,17 @@ class Critic(nn.Module):
 
 
 class PPO(nn.Module):
-    def __init__(self, cnn_out_size, action_shape, lstm_hidden_size, atten_size, net_width=64):
+    def __init__(self, NN_param, method_param):
         super().__init__()
-        self.action_shape = action_shape
-        self.encoder = Encoder(cnn_out_size, action_shape, lstm_hidden_size, atten_size)
-        self.actor = Actor(lstm_hidden_size, np.prod(np.array(self.action_shape)), net_width)
-        self.critic = Critic(lstm_hidden_size, net_width)
+        self.action_shape = tuple(NN_param["action_shape"])
+        self.num_iter_per_batch = method_param["num_iter_per_batch"]
+        self.gamma = method_param["RL_gamma"]
+        self.lambd = method_param["lambd"]
+        self.clip_rate = method_param["clip_rate"]
+        self.encoder = Encoder(NN_param["cnn_out_size"], self.action_shape, NN_param["lstm_hidden_size"],
+                               NN_param["atten_size"])
+        self.actor = Actor(NN_param["lstm_hidden_size"], np.prod(np.array(self.action_shape)), 64)
+        self.critic = Critic(NN_param["lstm_hidden_size"], 64)
 
     def forward(self, obs, hidden_state, cell_state):
         bsize = obs.shape[0]
@@ -69,7 +74,7 @@ class PPO(nn.Module):
         hidden_state, cell_state = self.encoder.lstm.init_hidden_states_and_outputs(bsize)
         return hidden_state, cell_state
 
-    def learn(self, batches, epoch, num_iter_per_batch, gamma, lambd, clip_rate):
+    def learn(self, batches, epoch):
         loss_stat = {}
         loss_stat["actor_loss"] = []
         loss_stat["critic_loss"] = []
@@ -77,7 +82,7 @@ class PPO(nn.Module):
             old_act_probs = []
             target_values = []
             advs = []
-            for i in range(num_iter_per_batch):
+            for i in range(self.num_iter_per_batch):
                 pred_values = []
                 actor_losses = []
                 for episode_idx in range(len(batch)):
@@ -106,7 +111,7 @@ class PPO(nn.Module):
                     act_prob_per_episode = torch.stack(act_prob_per_episode)
                     value_per_episode = torch.stack(value_per_episode)
                     if i == 0:
-                        deltas = rewards_per_episode + gamma * value_per_episode[1:] * (
+                        deltas = rewards_per_episode + self.gamma * value_per_episode[1:] * (
                                 1 - done_mask[1:]) - value_per_episode[0:-1]
                         deltas = deltas.detach().cpu().flatten().numpy()
                         done_mask = done_mask.detach().cpu().flatten().numpy()
@@ -114,7 +119,7 @@ class PPO(nn.Module):
 
                         '''done for GAE'''
                         for dlt, mask in zip(deltas[::-1], done_mask[:0:-1]):
-                            advantage = dlt + gamma * lambd * adv[-1] * (1 - mask)
+                            advantage = dlt + self.gamma * self.lambd * adv[-1] * (1 - mask)
                             adv.append(advantage)
                         adv.reverse()
                         adv = copy.deepcopy(adv[0:-1])
@@ -129,7 +134,7 @@ class PPO(nn.Module):
                     pred_values.append(value_per_episode[:-1])
                     ratio = torch.exp(torch.log(act_prob_per_episode) - torch.log(old_act_probs[episode_idx]))
                     surr1 = ratio * advs[episode_idx]
-                    surr2 = torch.clamp(ratio, 1 - clip_rate, 1 + clip_rate) * advs[episode_idx]
+                    surr2 = torch.clamp(ratio, 1 - self.clip_rate, 1 + self.clip_rate) * advs[episode_idx]
                     actor_loss_per_episode = -torch.min(surr1, surr2)
                     actor_loss_per_episode = actor_loss_per_episode.sum()
                     actor_losses.append(actor_loss_per_episode)
@@ -140,7 +145,7 @@ class PPO(nn.Module):
                 critic_loss = 0
                 for pred_value, target_value in zip(pred_values, target_values):
                     critic_loss = critic_loss + self.critic_criterion(pred_value, target_value)
-                critic_loss = critic_loss/len(pred_values)
+                critic_loss = critic_loss / len(pred_values)
                 self.actor_optimizer.zero_grad()
                 self.critic_optimizer.zero_grad()
                 actor_loss.backward(retain_graph=True)
