@@ -63,6 +63,8 @@ class Behavior_Cloning(nn.Module):
                     rewards, next(self.parameters()).device)
 
                 for t in range(len(batch[episode_idx])):
+                    hidden_state = hidden_state.detach()
+                    cell_state = cell_state.detach()
                     out, (hidden_state, cell_state), act_prob = self(
                         current_visual_obs_per_episode[:, t:t + 1],
                         hidden_state=hidden_state, cell_state=cell_state)
