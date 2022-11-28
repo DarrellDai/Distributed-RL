@@ -96,7 +96,7 @@ class Actor:
         for id in self.agent_ids:
             prev_obs[id][0] = prev_obs[id][0].reshape(1, 1, prev_obs[id][0].shape[0], prev_obs[id][0].shape[1],
                                                       prev_obs[id][0].shape[2])
-            _, (hidden_state[id], cell_state[id]), (act_prob, value) = self.models[id].evaluate(prev_obs[id][0],
+            _, (hidden_state[id], cell_state[id]), act_prob = self.models[id].evaluate(prev_obs[id][0],
                                                                                                 hidden_state=
                                                                                                 hidden_state[id],
                                                                                                 cell_state=
