@@ -25,6 +25,7 @@ class Learner:
         if MPI.COMM_WORLD.Get_rank() == 0:
             self._connect = redis.Redis(host=hostname, db=self.instance_idx)
             self._connect.delete("id_to_name")
+            self._connect.delete("name_tensorboard")
             self._connect.delete("params")
             self._connect.delete("optimizer")
             self._connect.delete("epsilon")
@@ -122,9 +123,11 @@ class Learner:
               total_epochs, num_batch_per_learner, actor_update_freq,
               performance_display_interval, checkpoint_save_interval, checkpoint_to_save):
         if MPI.COMM_WORLD.Get_rank() == 0:
-            writer = SummaryWriter(os.path.join("runs", str(self.instance_idx) + "_" + name_tensorboard +
-                                                "_" + str(batch_size) + "_" + str(num_batch_per_learner) + "_" + str(
-                initial_learning_rate) + "_" + str(learning_rate_gamma) + "_" + str(learning_rate_step_size)))
+            name_tensorboard = str(self.instance_idx) + "_" + name_tensorboard + "_" + str(batch_size) + "_" + str(
+                num_batch_per_learner) + "_" + str(
+                initial_learning_rate) + "_" + str(learning_rate_gamma) + "_" + str(learning_rate_step_size)
+            writer = SummaryWriter(os.path.join("runs", name_tensorboard))
+            self._connect.set("name_tensorboard", cPickle.dumps(name_tensorboard))
 
             counter = tqdm(range(self.initial_epoch_count, total_epochs))
         else:
@@ -176,7 +179,7 @@ class Learner:
                                           success_count / episode_count,
                                           epoch)
                     for loss_name in loss[id]:
-                        writer.add_scalar(self.id_to_name[id] + ": Loss vs Epoch", loss[id][loss_name], epoch)
+                        writer.add_scalar(self.id_to_name[id] + ": Loss ("+loss_name+") vs Epoch", loss[id][loss_name], epoch)
                 writer.flush()
 
                 if epoch % actor_update_freq == 0:
@@ -185,6 +188,7 @@ class Learner:
                         self._connect.set("to_update", cPickle.dumps(True))
                     if mode == "on_policy":
                         wait_until_false(self._connect, "to_update")
+                        self._connect.delete("experience")
                         self._memory.clear_memory()
 
                 if self.epsilon > final_epsilon:

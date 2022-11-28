@@ -40,11 +40,11 @@ class Actor:
             self.device = torch.device('cuda:' + str(device_idx))
         self.instance_idx = instance_idx
         self._connect = redis.Redis(host=hostname, db=instance_idx)
+        idx = 0
         while True:
-            idx = 0
             if not self._connect.get("actor{}".format(idx)) is None:
                 self._connect.delete("actor{}".format(idx))
-                idx+=1
+                idx += 1
             else:
                 break
         self.locks = []
@@ -109,11 +109,13 @@ class Actor:
             # lstm_out[id] = combine_out(lo, lo_new.to(self.device), self.atten_size[id])
         return act, hidden_state, cell_state
 
-    def collect_data(self, env, max_steps, name_tensorboard, actor_idx, mode):
+    def collect_data(self, env, max_steps, actor_idx, mode):
         if actor_idx == 0:
             self._connect.set("to_update", cPickle.dumps(False))
         memory = Memory(self.memory_size, self.agent_ids)
-        writer = SummaryWriter(os.path.join("runs", str(self.instance_idx) + "_" + name_tensorboard))
+        wait_until_present(self._connect, "name_tensorboard")
+        name_tensorboard = cPickle.loads(self._connect.get("name_tensorboard"))
+        writer = SummaryWriter(os.path.join("runs", name_tensorboard))
         total_reward = {}
         local_memory = {}
         hidden_state = {}
@@ -217,12 +219,11 @@ class Actor:
         for lock in self.locks:
             lock.release()
 
-    def run(self, seed, env, env_path, actor_idx, max_steps, name_tensorboard, mode):
+    def run(self, seed, env, env_path, actor_idx, max_steps, mode):
         random.seed(seed)
         if actor_idx != 0:
             env = self.initialize_env(env_path, actor_idx)
         self.collect_data(env=env, max_steps=max_steps,
-                          name_tensorboard=name_tensorboard,
                           actor_idx=actor_idx, mode=mode)
 
 
@@ -257,11 +258,11 @@ if __name__ == "__main__":
     for i in range(args.num_actors):
         if i == 0:
             thread = threading.Thread(target=actor.run, args=(
-                i, env, None, i, run_param["max_steps"], run_param["name_tensorboard"],
+                i, env, None, i, run_param["max_steps"],
                 args.mode))
         else:
             thread = threading.Thread(target=actor.run, args=(
-                i, None, run_param["env_path"], i, run_param["max_steps"], run_param["name_tensorboard"],
+                i, None, run_param["env_path"], i, run_param["max_steps"],
                 args.mode))
         threads.append(thread)
         thread.start()
