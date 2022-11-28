@@ -1,3 +1,8 @@
+import os
+import sys
+current = os.path.dirname(os.path.realpath(__file__))
+parent = os.path.dirname(current)
+sys.path.append(parent)
 import _pickle as cPickle
 import argparse
 import os
@@ -13,7 +18,7 @@ import yaml
 from mlagents_envs.environment import UnityEnvironment
 from tqdm import tqdm
 
-from Experience_Replay import Memory
+from Experience_Collector.Experience_Replay import Memory
 from unity_wrappers.envs import MultiUnityWrapper
 from utils import save_checkpoint, get_agents_id_to_name
 
@@ -162,7 +167,7 @@ class Human_play:
             self.connect.set("success_count", cPickle.dumps(0))
 
     def load_checkpoint(self, checkpoint_name):
-        filepath = os.path.join('Checkpoint', checkpoint_name)
+        filepath = os.path.join('../Checkpoint', checkpoint_name)
         checkpoint = torch.load(filepath, self.device)
         memory = checkpoint["memory"]
         id_to_name = checkpoint["id_to_name"]
@@ -193,7 +198,7 @@ if __name__ == "__main__":
     parser.add_argument('-ins', '--instance_idx', type=int, default=0, help="The index of instance to run")
     parser.add_argument('-w', '--worker', type=int, default=0, help="Worker id to run the environment")
     args = parser.parse_args()
-    with open("Config/Run/" + args.run_config) as file:
+    with open("../Config/Run/" + args.run_config) as file:
         param = yaml.safe_load(file)
     human_play = Human_play(device_idx=param["device_idx"], instance_idx=args.instance_idx)
     if args.mode == 'l':

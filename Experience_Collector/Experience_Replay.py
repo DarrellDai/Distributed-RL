@@ -1,12 +1,14 @@
+import os
+import sys
+current = os.path.dirname(os.path.realpath(__file__))
+parent = os.path.dirname(current)
+sys.path.append(parent)
 import _pickle as cPickle
 import random
 import threading
 import time
 from collections import deque
-
 import redis
-
-
 class Memory():
 
     def __init__(self, memsize, agent_ids):

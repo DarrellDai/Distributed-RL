@@ -4,7 +4,7 @@
 trap 'kill $(jobs -p)' SIGINT SIGTERM EXIT
 
 instance_idx=${1:-0}
-config="Config/Shell/${2:-"Self_Play.conf"}"
+config="../Config/Shell/${2:-"Self_Play.conf"}"
 source $config
 
 

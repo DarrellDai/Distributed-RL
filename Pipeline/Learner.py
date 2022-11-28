@@ -1,7 +1,12 @@
+import os
+import sys
+current = os.path.dirname(os.path.realpath(__file__))
+parent = os.path.dirname(current)
+sys.path.append(parent)
 import _pickle as cPickle
 import argparse
 import importlib
-import os
+
 import time
 
 import redis
@@ -11,7 +16,7 @@ from mpi4py import MPI
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
-from Experience_Replay import Distributed_Memory
+from Experience_Collector.Experience_Replay import Distributed_Memory
 from utils import initialize_model, save_checkpoint, load_checkpoint, wait_until_present, \
     wait_until_false, calculate_loss_from_all_loss_stats
 
@@ -127,7 +132,7 @@ class Learner:
             name_tensorboard = str(self.instance_idx) + "_" + name_tensorboard + "_" + str(batch_size) + "_" + str(
                 num_batch_per_learner) + "_" + str(
                 initial_learning_rate) + "_" + str(learning_rate_gamma) + "_" + str(learning_rate_step_size)
-            writer = SummaryWriter(os.path.join("runs", name_tensorboard))
+            writer = SummaryWriter(os.path.join("../runs", name_tensorboard))
             self._connect.set("name_tensorboard", cPickle.dumps(name_tensorboard))
 
             counter = tqdm(range(self.initial_epoch_count, total_epochs))
@@ -221,16 +226,16 @@ if __name__ == "__main__":
     parser.add_argument('-ins', '--instance_idx', type=int, default=0, help="The index of instance to run")
     parser.add_argument('-nnc', '--nn_config', type=str, default='NN.yaml', help="Neural network config file name")
     parser.add_argument('-mc', '--method_config', type=str, default='BC.yaml', help="Method config file name")
-    parser.add_argument('-rc', '--run_config', type=str, default='Run.yaml', help="Running config file name")
+    parser.add_argument('-rc', '--run_config', type=str, default='Train.yaml', help="Running config file name")
     args = parser.parse_args()
-    with open("Config/Neural_Network/" + args.nn_config) as file:
+    with open("../Config/Neural_Network/" + args.nn_config) as file:
         nn_param = yaml.safe_load(file)
-    with open("Config/Methods/" + args.method_config) as file:
+    with open("../Config/Methods/" + args.method_config) as file:
         method_param = yaml.safe_load(file)
-    with open("Config/Run/" + args.run_config) as file:
+    with open("../Config/Run/" + args.run_config) as file:
         run_param = yaml.safe_load(file)
 
-    Method = getattr(importlib.import_module(method_param["method"]), method_param["method"])
+    Method = getattr(importlib.import_module("Models."+method_param["method"]), method_param["method"])
     learner = Learner(memsize=run_param["memory_size"], epsilon=run_param["initial_epsilon"],
                       hostname=args.redisserver, device_idx=run_param["device_idx"], instance_idx=args.instance_idx)
 

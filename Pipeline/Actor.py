@@ -1,6 +1,10 @@
+import os
+import sys
+current = os.path.dirname(os.path.realpath(__file__))
+parent = os.path.dirname(current)
+sys.path.append(parent)
 import _pickle as cPickle
 import argparse
-import os
 import random
 import threading
 from copy import deepcopy
@@ -14,7 +18,7 @@ import yaml
 from mlagents_envs.environment import UnityEnvironment
 from torch.utils.tensorboard import SummaryWriter
 
-from Experience_Replay import Memory
+from Experience_Collector.Experience_Replay import Memory
 from unity_wrappers.envs import MultiUnityWrapper
 from utils import load_checkpoint, initialize_model, find_optimal_action, \
     wait_until_present, get_agents_id_to_name
@@ -114,7 +118,7 @@ class Actor:
         memory = Memory(self.memory_size, self.agent_ids)
         wait_until_present(self._connect, "name_tensorboard")
         name_tensorboard = cPickle.loads(self._connect.get("name_tensorboard"))
-        writer = SummaryWriter(os.path.join("runs", name_tensorboard))
+        writer = SummaryWriter(os.path.join("../runs", name_tensorboard))
         total_reward = {}
         local_memory = {}
         hidden_state = {}
@@ -238,18 +242,18 @@ if __name__ == "__main__":
     parser.add_argument('-rc', '--run_config', type=str, default='Train.yaml', help="Running config file name")
     args = parser.parse_args()
 
-    with open("Config/Neural_Network/" + args.nn_config) as file:
+    with open("../Config/Neural_Network/" + args.nn_config) as file:
         nn_param = yaml.safe_load(file)
-    with open("Config/Methods/" + args.method_config) as file:
+    with open("../Config/Methods/" + args.method_config) as file:
         method_param = yaml.safe_load(file)
-    with open("Config/Run/" + args.run_config) as file:
+    with open("../Config/Run/" + args.run_config) as file:
         run_param = yaml.safe_load(file)
     actor = Actor(
         num_actor=args.num_actors,
         device_idx=args.device, memsize=run_param["memory_size"], hostname=args.redisserver,
         instance_idx=args.instance_idx)
     env = actor.initialize_env(run_param["env_path"], 0)
-    Method = getattr(importlib.import_module(method_param["method"]), method_param["method"])
+    Method = getattr(importlib.import_module("Models."+method_param["method"]), method_param["method"])
 
     actor.initialize_model(nn_param=nn_param, method_param=method_param, mode=args.mode, method=Method, checkpoint_to_load=run_param["checkpoint_to_load"])
     threads = []

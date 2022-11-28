@@ -1,10 +1,14 @@
+import os
+import sys
+current = os.path.dirname(os.path.realpath(__file__))
+parent = os.path.dirname(current)
+sys.path.append(parent)
 import copy
-
 import numpy as np
 import torch
 import torch.nn as nn
 
-from Encoder import Encoder
+from .Encoder import Encoder
 from utils import preprocess_data_from_batch, extract_input_per_episode, sync_grads
 
 

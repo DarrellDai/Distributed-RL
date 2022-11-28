@@ -1,7 +1,7 @@
 import numpy as np
 import torch
 
-from Encoder import Encoder
+from Models.Encoder import Encoder
 import torch.optim as optim
 import redis
 import _pickle as cPickle

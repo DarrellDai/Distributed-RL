@@ -1,7 +1,7 @@
 import numpy as np
 import torch.nn as nn
 from torchvision.models import resnet18
-from LSTM_attention import LSTM
+from .LSTM_attention import LSTM
 
 
 
