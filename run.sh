@@ -23,15 +23,15 @@ if $human_play; then
 	pids="$pids $!"
 fi
 wait -f $pids
-#pids=""
-#if $leaner; then
-#	mpirun -np $num_learners python Learner.py -rc $Train_config -ins $instance_idx &
-#	pids="$pids $!"
-#fi
-#
-#if $actor; then
-#    python Actor.py -n $num_actors -rc $Train_config -r $redis_server -d $device -ins $instance_idx &
-#    pids="$pids $!"
-#fi
-## Exit the this script when there's a child process is done, so all child process will be killed
-#wait -n $pids
+pids=""
+if $leaner; then
+	mpirun -np $num_learners python Learner.py -rc $Train_config -ins $instance_idx &
+	pids="$pids $!"
+fi
+
+if $actor; then
+    python Actor.py -n $num_actors -rc $Train_config -r $redis_server -d $device -ins $instance_idx &
+    pids="$pids $!"
+fi
+# Exit the this script when there's a child process is done, so all child process will be killed
+wait -n $pids
