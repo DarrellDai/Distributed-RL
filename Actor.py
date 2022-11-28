@@ -234,7 +234,7 @@ if __name__ == "__main__":
     parser.add_argument('-d', '--device', type=int, default=0, help="Index of GPU to use, -1 is CPU")
     parser.add_argument('-m', '--mode', type=str, default="train", help="Run or test mode")
     parser.add_argument('-nnc', '--nn_config', type=str, default='NN.yaml', help="Neural network config file name")
-    parser.add_argument('-mc', '--method_config', type=str, default='PPO.yaml', help="Method config file name")
+    parser.add_argument('-mc', '--method_config', type=str, default='BC.yaml', help="Method config file name")
     parser.add_argument('-rc', '--run_config', type=str, default='Train.yaml', help="Running config file name")
     args = parser.parse_args()
 

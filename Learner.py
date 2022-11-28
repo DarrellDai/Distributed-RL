@@ -220,7 +220,7 @@ if __name__ == "__main__":
     parser.add_argument('-r', '--redisserver', type=str, default='localhost', help="Redis's server name.")
     parser.add_argument('-ins', '--instance_idx', type=int, default=0, help="The index of instance to run")
     parser.add_argument('-nnc', '--nn_config', type=str, default='NN.yaml', help="Neural network config file name")
-    parser.add_argument('-mc', '--method_config', type=str, default='PPO.yaml', help="Method config file name")
+    parser.add_argument('-mc', '--method_config', type=str, default='BC.yaml', help="Method config file name")
     parser.add_argument('-rc', '--run_config', type=str, default='Run.yaml', help="Running config file name")
     args = parser.parse_args()
     with open("Config/Neural_Network/" + args.nn_config) as file:

@@ -3,7 +3,7 @@ checkpoint_to_load: "Checkpoint_Nav_Distributed_RL_Debug.pth.tar"
 checkpoint_to_save: "Checkpoint_Nav_Distributed_RL_Debug.pth.tar"
 name_tensorboard: "CNN_LSTM_DQN_Nav_Distributed_RL_Hider_Debug"
 memory_size: 5
-device_idx: -1
+device_idx: [0]
 resume: False
 total_epochs: 100
 max_steps: 50
