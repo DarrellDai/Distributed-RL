@@ -148,6 +148,7 @@ def save_obj(obj, name):
 
 
 def save_checkpoint(state, filename, dirname='Checkpoint'):
+    dirname=os.path.join(os.path.dirname(os.path.realpath(__file__)), dirname)
     if not os.path.exists(dirname):
         os.mkdir(dirname)
     # filename='Checkpoint_{}.pth.tar'.format(state['episode_count'])
@@ -168,7 +169,7 @@ def find_latest_checkpoint(dirname='Checkpoint'):
 
 
 def load_checkpoint(filename, device, dirname='Checkpoint'):
-    filepath = os.path.join(dirname, filename)
+    filepath = os.path.join(os.path.dirname(os.path.realpath(__file__)), dirname, filename)
     checkpoint = torch.load(filepath, map_location=device)
 
     return checkpoint['model_state_dicts'], checkpoint['optimizer_state_dicts'], checkpoint[

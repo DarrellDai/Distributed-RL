@@ -1,5 +1,5 @@
 env_path: 'C:/Unity Projects/Hide and Seek/Environments/2.0/Env_Nav_3_Seekers_Big_Rocks_No_Waiting_Time'
-checkpoint_to_load: "0_360_Checkpoint_Nav_Distributed_RL_BC_25_2_5e-05_0.5_125"
+checkpoint_to_load: "0_330_Checkpoint_Nav_Distributed_RL_BC_25_1_0.0005_1_25"
 checkpoint_to_save: "Checkpoint_Nav_Distributed_RL_BC"
 name_tensorboard: "CNN_LSTM_DQN_Nav_Distributed_RL_Hider_BC"
 memory_size: 1
