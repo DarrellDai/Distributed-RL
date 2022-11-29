@@ -42,7 +42,7 @@ class Human_play:
         self.env = MultiUnityWrapper(unity_env=unity_env, uint8_visual=True, allow_multiple_obs=True)
         self.id_to_name = get_agents_id_to_name(self.env)
         self.agent_ids = tuple(self.id_to_name.keys())
-        self.max_steps = max_steps
+        self.max_steps = max_steps+15
         self.total_episodes = total_episodes
 
     def controller(self):
@@ -86,8 +86,7 @@ class Human_play:
         total_reward = {}
         exit = False
         for episode in tqdm(range(start_episode, self.total_episodes)):
-            for _ in range(20):
-                prev_obs = self.env.reset()
+            prev_obs = self.env.reset()
             step_count = 0
             local_memory = {}
             for id in self.agent_ids:
@@ -103,9 +102,11 @@ class Human_play:
                 step_count += 1
                 done = done_dict["__all__"]
                 for id in self.agent_ids:
-                    local_memory[id].append(
-                        (deepcopy(prev_obs[id]), deepcopy(act[id]), deepcopy(reward_dict[id]), deepcopy(obs_dict[id])))
-                    total_reward[id] += reward_dict[id]
+                    if prev_obs[id][1][1] == 0:
+                        local_memory[id].append(
+                            (deepcopy(prev_obs[id]), deepcopy(act[id]), deepcopy(reward_dict[id]),
+                             deepcopy(obs_dict[id])))
+                        total_reward[id] += reward_dict[id]
                     if reward_dict[id] == -1:
                         done = True
                 prev_obs = obs_dict
@@ -119,12 +120,11 @@ class Human_play:
                     self.connect.rpush("experience", cPickle.dumps(mem))
                     for id in self.agent_ids:
                         mem.replay_buffer[id].clear()
-            if exit:
-                break
             for id in self.agent_ids:
                 print('\n Agent %d, Reward: %f \n' % (id, total_reward[id]))
-                print("Win rate: {}/{}".format(num_win, episode))
-
+                print("Win rate: {}/{}".format(num_win, episode+1))
+            if exit:
+                break
         self.env.close()
         return mem, num_win
 
@@ -145,7 +145,7 @@ class Human_play:
                     stored_memory += 1
                     if stored_memory == self.total_episodes:
                         break
-            mem, num_win = self.play_game(start_episode=len(new_mem) - 1, mem=new_mem, num_win=num_win)
+            mem, num_win = self.play_game(start_episode=len(new_mem), mem=new_mem, num_win=num_win)
         else:
             mem, num_win = self.play_game()
         filename = checkpoint_to_save + "_" + datetime.now().isoformat()[:10] + "_" + datetime.now().isoformat()[
