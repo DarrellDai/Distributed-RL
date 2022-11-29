@@ -99,7 +99,7 @@ def extract_input_per_episode(act, batch_idx, current_vector_obs, current_visual
         if next_vector_obs_per_episode[t][0] == 0:
             done_mask[t + 1:] = 1
             break
-    return act_per_episode, current_visual_obs_per_episode, current_vector_obs_per_episode, rewards_per_episode, visual_obs_per_episode, next_vector_obs_per_episode, done_mask
+    return act_per_episode, current_visual_obs_per_episode, current_vector_obs_per_episode, rewards_per_episode, visual_obs_per_episode, next_visual_obs_per_episode, next_vector_obs_per_episode, done_mask
 
 
 # dqn_out(bsize, act_shape[0]...)
