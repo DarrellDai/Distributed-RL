@@ -14,11 +14,7 @@ from utils import preprocess_data_from_batch, extract_input_per_episode, sync_gr
 class BCNet(nn.Module):
     def __init__(self, input_size, output_size):
         super().__init__()
-        self.bc_net = nn.Sequential(nn.Linear(input_size, int(input_size / 3)),
-                                    nn.ReLU(),
-                                    nn.Linear(int(input_size / 3), int(input_size / 9)),
-                                    nn.ReLU(),
-                                    nn.Linear(int(input_size / 9), output_size),
+        self.bc_net = nn.Sequential(nn.Linear(input_size, output_size),
                                     nn.Softmax(-1)
                                     )
 

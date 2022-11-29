@@ -2,6 +2,7 @@ import numpy as np
 import torch.nn as nn
 from torchvision.models import resnet18
 from .LSTM_attention import LSTM
+from .ConvNet import ConvNet
 
 
 
@@ -14,7 +15,8 @@ class Encoder(nn.Module):
         super(Encoder, self).__init__()
         self.action_shape = action_shape
         self.cnn_out_size = cnn_out_size
-        self.resnet = resnet18(num_classes=cnn_out_size)
+        self.cnn=ConvNet(cnn_out_size)
+        # self.resnet = resnet18(num_classes=cnn_out_size)
         self.lstm = LSTM(cnn_out_size, lstm_hidden_size, atten_size)
 
     '''
@@ -47,9 +49,9 @@ class Encoder(nn.Module):
             obs = obs.reshape(bsize * obs.shape[1], 1, obs.shape[2], obs.shape[3])
         else:
             raise RuntimeError("The observation shape must be (bsize, time_step, width, height, (channel)")
-        resnet_out = self.resnet(obs)
-        resnet_out = resnet_out.view(bsize, int(obs.shape[0] / bsize), -1)
-        lstm_out, (hidden_state, cell_state) = self.lstm(resnet_out, hidden_state, cell_state)
+        cnn_out = self.cnn(obs)
+        cnn_out = cnn_out.view(bsize, int(obs.shape[0] / bsize), -1)
+        lstm_out, (hidden_state, cell_state) = self.lstm(cnn_out, hidden_state, cell_state)
         return lstm_out, (hidden_state, cell_state)
         # # todo: original code here mignt not cosider the atten_size in dqn_out
         # if self.method == "DQN" or self.method == "BC":
