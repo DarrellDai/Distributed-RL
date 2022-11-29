@@ -28,12 +28,11 @@ class LSTM(nn.Module):
         device = x.device
         hidden_state = hidden_state.reshape((hidden_state.shape[1], hidden_state.shape[0]) + hidden_state.shape[2:])
         cell_state = cell_state.reshape((cell_state.shape[1], cell_state.shape[0]) + cell_state.shape[2:])
-        for T in range(x.shape[1]):
-            self.lstm_layer.flatten_parameters()
-            lstm_out = self.lstm_layer(x, (hidden_state, cell_state))
-            hidden_state = lstm_out[1][0]
-            cell_state = lstm_out[1][1]
-            out = lstm_out[0]
+        self.lstm_layer.flatten_parameters()
+        lstm_out = self.lstm_layer(x, (hidden_state, cell_state))
+        hidden_state = lstm_out[1][0]
+        cell_state = lstm_out[1][1]
+        out = lstm_out[0]
         hidden_state = hidden_state.reshape((hidden_state.shape[1], hidden_state.shape[0]) + hidden_state.shape[2:])
         cell_state = cell_state.reshape((cell_state.shape[1], cell_state.shape[0]) + cell_state.shape[2:])
         return out, (hidden_state, cell_state)

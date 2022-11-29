@@ -68,16 +68,15 @@ class Behavior_Cloning(nn.Module):
                     act, episode_idx, current_vector_obs, current_visual_obs, next_vector_obs, next_visual_obs,
                     rewards, next(self.parameters()).device)
 
-                for t in range(len(batch[episode_idx])):
-                    hidden_state = hidden_state.detach()
-                    cell_state = cell_state.detach()
-                    out, (hidden_state, cell_state), act_prob = self(
-                        current_visual_obs_per_episode[:, t:t + 1],
-                        hidden_state=hidden_state, cell_state=cell_state)
-                    pred_values.append(act_prob.view(-1))
-                    target_values.append(torch.tensor(
-                        np.ravel_multi_index(np.array(act_per_episode[0, t].cpu()) + 1,
-                                             act_prob[0].shape)).detach())
+                hidden_state = hidden_state.detach()
+                cell_state = cell_state.detach()
+                out, _, act_prob = self(
+                    current_visual_obs_per_episode,
+                    hidden_state=hidden_state, cell_state=cell_state)
+                pred_values.append(act_prob.view(-1))
+                target_values.append(torch.tensor(
+                    np.ravel_multi_index(np.array(act_per_episode[0, -1].cpu()) + 1,
+                                         act_prob[0].shape)).detach())
 
             pred_values = torch.stack(pred_values)
             target_values = torch.stack(target_values).to(next(self.parameters()).device)
