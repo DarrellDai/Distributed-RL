@@ -1,0 +1,4 @@
+method: "DQN"
+mode: "off_policy"
+RL_gamma: 0.99
+target_update_freq(epochs): 15
