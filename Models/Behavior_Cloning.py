@@ -14,11 +14,7 @@ from utils import preprocess_data_from_batch, extract_input_per_episode, sync_gr
 class BCNet(nn.Module):
     def __init__(self, input_size, output_size):
         super().__init__()
-        self.bc_net = nn.Sequential(nn.Linear(input_size, int(input_size / 3)),
-                                    nn.ReLU(),
-                                    nn.Linear(int(input_size / 3), int(input_size / 9)),
-                                    nn.ReLU(),
-                                    nn.Linear(int(input_size / 9), output_size),
+        self.bc_net = nn.Sequential(nn.Linear(input_size, output_size),
                                     nn.Softmax(-1)
                                     )
 
@@ -64,7 +60,7 @@ class Behavior_Cloning(nn.Module):
                     next(self.parameters()).device)
                 act, current_vector_obs, current_visual_obs, next_vector_obs, next_visual_obs, rewards = preprocess_data_from_batch(
                     batch)
-                act_per_episode, current_visual_obs_per_episode, current_vector_obs_per_episode, rewards_per_episode, visual_obs_per_episode, next_vector_obs_per_episode, _ = extract_input_per_episode(
+                act_per_episode, current_visual_obs_per_episode, current_vector_obs_per_episode, rewards_per_episode, visual_obs_per_episode, next_visual_obs_per_episode, next_vector_obs_per_episode, done_mask = extract_input_per_episode(
                     act, episode_idx, current_vector_obs, current_visual_obs, next_vector_obs, next_visual_obs,
                     rewards, next(self.parameters()).device)
                 out, _, act_prob = self(

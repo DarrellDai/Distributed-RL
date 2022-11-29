@@ -3,7 +3,7 @@ checkpoint_to_load: "0_360_Checkpoint_Nav_Distributed_RL_BC_25_2_5e-05_0.5_125"
 checkpoint_to_save: "Checkpoint_Nav_Distributed_RL_BC"
 name_tensorboard: "CNN_LSTM_DQN_Nav_Distributed_RL_Hider_BC"
 memory_size: 76
-device_idx: [2]
+device_idx: [4]
 resume: False
 total_epochs: 1200
 max_steps: 50
