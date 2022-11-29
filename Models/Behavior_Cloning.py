@@ -63,9 +63,6 @@ class Behavior_Cloning(nn.Module):
                 act_per_episode, current_visual_obs_per_episode, current_vector_obs_per_episode, rewards_per_episode, visual_obs_per_episode, next_vector_obs_per_episode, _ = extract_input_per_episode(
                     act, episode_idx, current_vector_obs, current_visual_obs, next_vector_obs, next_visual_obs,
                     rewards, next(self.parameters()).device)
-
-                hidden_state = hidden_state.detach()
-                cell_state = cell_state.detach()
                 out, _, act_prob = self(
                     current_visual_obs_per_episode,
                     hidden_state=hidden_state, cell_state=cell_state)
