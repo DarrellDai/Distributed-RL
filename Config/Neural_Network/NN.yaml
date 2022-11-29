@@ -1,4 +1,4 @@
-cnn_out_size: [512]
+cnn_out_size: [500]
 atten_size: [5]
 lstm_hidden_size: [512]
 action_shape: [[3,3]]
