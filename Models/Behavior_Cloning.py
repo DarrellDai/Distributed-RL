@@ -27,7 +27,7 @@ class Behavior_Cloning(nn.Module):
     def __init__(self, nn_param, method_param):
         super().__init__()
         self.action_shape = tuple(nn_param["action_shape"])
-        self.encoder = Encoder(nn_param["cnn_out_size"], self.action_shape, nn_param["lstm_hidden_size"],
+        self.encoder = Encoder(self.action_shape, nn_param["lstm_hidden_size"],
                                nn_param["atten_size"])
         self.bc = BCNet(nn_param["lstm_hidden_size"], np.prod(np.array(self.action_shape)))
 

@@ -10,12 +10,16 @@ class Encoder(nn.Module):
     action_shape(tuple): action shape for an agent
     '''
 
-    def __init__(self, cnn_out_size, action_shape, lstm_hidden_size, atten_size):
+    def __init__(self, action_shape, lstm_hidden_size, atten_size):
         super(Encoder, self).__init__()
         self.action_shape = action_shape
-        self.cnn_out_size = cnn_out_size
-        self.resnet = resnet18(num_classes=cnn_out_size)
-        self.lstm = LSTM(cnn_out_size, lstm_hidden_size, atten_size)
+        self.conv_layer1 = nn.Conv2d(in_channels=3, out_channels=32, kernel_size=8,
+                                     stride=4)  # potential check - in_channels
+        self.conv_layer2 = nn.Conv2d(in_channels=32, out_channels=64, kernel_size=4, stride=2)
+        self.conv_layer3 = nn.Conv2d(in_channels=64, out_channels=64, kernel_size=3, stride=1)
+        self.conv_layer4 = nn.Conv2d(in_channels=64, out_channels=512, kernel_size=7, stride=1)
+        self.lstm = LSTM(512, lstm_hidden_size, atten_size)
+        self.relu = nn.ReLU()
 
     '''
     Input:
@@ -47,20 +51,17 @@ class Encoder(nn.Module):
             obs = obs.reshape(bsize * obs.shape[1], 1, obs.shape[2], obs.shape[3])
         else:
             raise RuntimeError("The observation shape must be (bsize, time_step, width, height, (channel)")
-        resnet_out = self.resnet(obs)
-        resnet_out = resnet_out.view(bsize, int(obs.shape[0] / bsize), -1)
-        lstm_out, (hidden_state, cell_state) = self.lstm(resnet_out, hidden_state, cell_state)
+        conv_out = self.conv_layer1(obs)
+        conv_out = self.relu(conv_out)
+        conv_out = self.conv_layer2(conv_out)
+        conv_out = self.relu(conv_out)
+        conv_out = self.conv_layer3(conv_out)
+        conv_out = self.relu(conv_out)
+        conv_out = self.conv_layer4(conv_out)
+        conv_out = self.relu(conv_out)
+        conv_out = conv_out.view(bsize, int(obs.shape[0] / bsize), -1)
+        lstm_out, (hidden_state, cell_state) = self.lstm(conv_out, hidden_state, cell_state)
         return lstm_out, (hidden_state, cell_state)
-        # # todo: original code here mignt not cosider the atten_size in dqn_out
-        # if self.method == "DQN" or self.method == "BC":
-        #     network_out = self.fc(lstm_out[:, -1, :])
-        #     network_out = network_out.view((bsize,) + self.action_shape)
-        #     return lstm_out, (hidden_state, cell_state), network_out
-        # elif self.method == "PPO":
-        #     act_prob = self.fc[0](lstm_out[:, -1, :])
-        #     act_prob = act_prob.view((bsize,) + self.action_shape)
-        #     value = self.fc[1](lstm_out[:, -1, :])
-        #     return lstm_out, (hidden_state, cell_state), (act_prob, value)
 
     def generate_action_matrix(self):
         action_matrix = np.zeros(self.action_shape)

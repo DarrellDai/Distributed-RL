@@ -48,7 +48,7 @@ class PPO(nn.Module):
         self.gamma = method_param["RL_gamma"]
         self.lambd = method_param["lambd"]
         self.clip_rate = method_param["clip_rate"]
-        self.encoder = Encoder(NN_param["cnn_out_size"], self.action_shape, NN_param["lstm_hidden_size"],
+        self.encoder = Encoder(self.action_shape, NN_param["lstm_hidden_size"],
                                NN_param["atten_size"])
         self.actor = Actor(NN_param["lstm_hidden_size"], np.prod(np.array(self.action_shape)), 64)
         self.critic = Critic(NN_param["lstm_hidden_size"], 64)

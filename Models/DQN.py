@@ -16,7 +16,7 @@ class DQNNet(nn.Module):
                                atten_size, action_shape):
         super(DQNNet, self).__init__()
         self.action_shape=tuple(action_shape)
-        self.encoder = Encoder(cnn_out_size, self.action_shape, lstm_hidden_size,
+        self.encoder = Encoder(self.action_shape, lstm_hidden_size,
                                atten_size)
         self.adv = nn.Linear(lstm_hidden_size, np.prod(np.array(self.action_shape)))
         self.val = nn.Linear(lstm_hidden_size, 1)
